@@ -1,9 +1,29 @@
-# `monkeyGUIv3_2`
+# monkeyUnity
+
 Mel Xu, Feb 2025
 
 Rehab Neural Engineering Labs, RNEL, University of Pittsburgh
 
 *These codes haven't been made transplantable yet. It only works on one specific computer. Uploading it here is just for deposition*
+
+## Overview
+
+Scripts unifying workflow as *Qin Shi Huang* did when unifying the six states.
+
+Digitally immortalize your monkeys in all their moving glory.
+
+| Script               | Description                                                  |
+| -------------------- | ------------------------------------------------------------ |
+| `monkeyGUIv3_2.py`   | A pipeline GUI for data management and processing by calling `monkeyUnityv1_6.py` |
+| `monkeyUnityv1_6.py` | Where the automation happens. Support command line usage.    |
+| `VidSyncLEDv2_3.py`  | Synchronize videos according to LED status in ROI            |
+| `ROIConfig-full.py`  | A little helper script to select ROIs for LED detection      |
+| eventMarker          | A PyQt5-based video player with up to 5 marker sets, by which one can mark movement events |
+
+
+
+# `monkeyGUIv3_2`
+
 ## Usage
 
 start environment `monkeyUnity` from Anaconda, if `conda` doesn't work in cmd.

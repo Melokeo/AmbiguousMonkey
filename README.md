@@ -20,7 +20,7 @@ Digitally immortalize your monkeys in all their moving glory.
 | `ROIConfig-full.py`  | A little helper script to select ROIs for LED detection      |
 | eventMarker          | A PyQt5-based video player with up to 5 marker sets, by which one can mark movement events |
 
-
+![IMG_2742](https://github.com/user-attachments/assets/dd36c849-31ef-4401-aa1b-cf923f096ce1)
 
 # `monkeyGUIv3_2`
 

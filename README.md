@@ -1,6 +1,7 @@
 # `monkeyGUIv3_2`
 Mel Xu, Feb 2025
-Rehab Neural Engineering Labs, RNEL, University of Piitsburgh
+
+Rehab Neural Engineering Labs, RNEL, University of Pittsburgh
 
 *These codes haven't been made transplantable yet. It only works on one specific computer. Uploading it here is just for deposition*
 ## Usage

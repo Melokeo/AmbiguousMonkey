@@ -1,0 +1,64 @@
+project = "250123-pici-ts-anipose"
+model_folder = 'C:\Users\rnel\Desktop\DLC\01\20250123\ts\250123-pici-ts-L1-Mel-2025-01-24'
+nesting = 1
+video_extension = 'mp4'
+# config that has Fx1~3 tracked in DLC (instead of added manually)
+
+[calibration]
+board_type = "charuco"          # checkerboard / charuco / aruco
+board_size = [5,7]   # width and height of grid
+board_marker_bits = 6           # number of bits in the markers, if aruco/charuco
+board_marker_dict_number = 50 #number of markers in dictionary, if aruco/charuco
+board_marker_length = 22         # length of marker side
+board_square_side_length = 37    # If charuco or checkerboard, square side length
+
+
+[filter]
+enabled = true
+medfilt = 13                    # length of median filter
+offset_threshold = 30           # offset from median filter to count as jump
+score_threshold = 0.6           # score below which to count as bad
+spline = true                   # interpolate using cubic spline instead of linear 
+
+
+[labeling]
+scheme = [
+    ["LUPA", "LELB", "LWRA", "LWRB", "LMCP", ],
+    ["Fx1", "Fx2", "Fx3"]
+]
+
+[triangulation]
+triangulate = true
+cam_regex = '-cam([1-9])'
+cam_align = "1"
+ransac = false
+optim = true
+constraints = [
+	['LUPA', 'LELB'],
+    ['LELB', 'LWRA'],
+    ['LWRA', 'LMCP'],
+    ['LELB', 'LWRB'],
+    ['LWRB', 'LMCP'],
+    ["Fx1", "Fx2"],
+    ["Fx3", "Fx2"]
+]
+
+scale_smooth = 8
+scale_length = 4
+scale_length_weak = 0.5
+reproj_error_threshold = 3
+score_threshold = 0.8
+n_deriv_smooth = 2
+reference_point = "Fx1"
+axes = [
+	['x','Fx1','Fx2'],
+	['z','Fx3','Fx2']
+]
+
+[angles]
+ELB = ["LUPA", "LELB", "LWRB"]
+WRT = ["LELB", "LWRA", "LMCP"]
+
+
+[pipeline]
+videos-raw = "videos-raw"

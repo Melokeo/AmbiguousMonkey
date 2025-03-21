@@ -4,11 +4,11 @@ Mel Xu, Feb 2025
 
 Rehab Neural Engineering Labs, RNEL, University of Pittsburgh
 
-*These codes haven't been made transplantable yet. It only works on one specific computer. Uploading it here is just for deposition*
-
 ## Overview
 
 Scripts unifying workflow as *Qin Shi Huang* did when unifying the six states.
+
+Packages mainly used: DeepLabCut, Anipose
 
 Digitally immortalize your monkeys in all their moving glory.
 

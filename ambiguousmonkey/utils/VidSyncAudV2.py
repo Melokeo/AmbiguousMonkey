@@ -17,22 +17,32 @@ import subprocess
 import scipy.signal
 import matplotlib.pyplot as plt
 
+ffmpeg_path = r'C:\ffmpeg\bin\ffmpeg.exe'
+
 def extract_audio(video_path, sample_rate=48000, duration=30, start=0):
     """
     Extracts a short segment of audio from the video using FFmpeg.
-    - duration: The number of seconds to extract (default: 30s).
-    - sample_rate: The target audio sampling rate (default: 48kHz).
+    - duration: The number of seconds to extract (default: 30 s).
+    - sample_rate: The target audio sampling rate (default: 48000 Hz).
     """
-    temp_audio = "temp_audio.wav"
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(f'In extract_audio: cannot find {video_path}')
+    
+    temp_audio = "mky_temp_audio.wav"
     cmd = [
-        "ffmpeg", "-y", "-i", video_path,
+        ffmpeg_path, "-y", "-i", video_path,
         "-ss", str(start),
         "-ac", "1", 
         "-ar", str(sample_rate),
         "-t", str(duration), 
         "-vn", "-loglevel", "error", temp_audio
     ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.DEVNULL) #, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        raise RuntimeError("Audio extraction failed. It's possibly because ffmpeg isn't correctly configured")
+    if result.stderr:
+        print(result.stderr)
     audio, sr = librosa.load(temp_audio, sr=sample_rate)
     os.remove(temp_audio)
     print(f'Extracted audio from {os.path.basename(video_path)}')
@@ -55,6 +65,7 @@ def find_best_sync_offset(ref_audio, target_audio, sr, fps=120, hop_length=128):
     target_energy = compute_energy_envelope(target_audio, sr, hop_length)
     
     correlation = scipy.signal.correlate(target_energy, ref_energy, mode='full')
+    print(f'Paired corr {max(correlation)}')
     lag = np.argmax(correlation) - (len(ref_energy) - 1)
     
     time_offset = lag * (hop_length / sr)  

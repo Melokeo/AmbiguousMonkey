@@ -7,6 +7,7 @@ ConfigSyncWorker
 RunSyncWorker
 ToColabWorker
 FromColabWorker
+RunDlcWorker
 SetupAniposeWorker
 RunAniposeWorker
 RunCalibrationWorker
@@ -117,6 +118,30 @@ class FromColabWorker(QThread):
         finally:
             sys.stdout = original_stdout
 
+class RunDlcWorker(QThread):
+    log_signal = pyqtSignal(str)
+    # return_signal = pyqtSignal(list, list)
+
+    def __init__(self, vid_path, shuffle=[1, 1], side=['L','R']):
+        super().__init__()
+        self.vid_path = vid_path
+        self.shuffle = shuffle
+        self.side = side
+
+    def run(self):
+        original_stdout = sys.stdout 
+        sys.stdout = EmittingStream(self.log_signal)
+        try:
+            self.log_signal.emit("Starting DLC...")
+            self.log_signal.emit("Check status in command lines")
+            mky.runDLC(self.vid_path, shuffle=self.shuffle, side=self.side)
+            # self.return_signal.emit(vid_path, cfg_path)
+            self.log_signal.emit("Finished DeepLabCut!\n")
+        except Exception as e:
+            self.log_signal.emit(f"Error during DLC: {str(e)}\n")
+        finally:
+            sys.stdout = original_stdout
+
 class SetupAniposeWorker(QThread):
     log_signal = pyqtSignal(str)
     # return_signal = pyqtSignal(list, list)
@@ -158,7 +183,7 @@ class RunAniposeWorker(QThread):
             # self.return_signal.emit(vid_path, cfg_path)
             self.log_signal.emit("Finished anipose!\n")
         except Exception as e:
-            self.log_signal.emit(f"Error during moving: {str(e)}\n")
+            self.log_signal.emit(f"Error during anipose analysis: {str(e)}\n")
         finally:
             sys.stdout = original_stdout
 

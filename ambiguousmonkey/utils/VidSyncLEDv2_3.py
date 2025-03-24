@@ -10,13 +10,16 @@ import matplotlib.pyplot as plt
 
 CHECK_FURTHEST = 4000
 debug = False
-show_plt = True
+show_plt = False
+ffmpeg_path = r'C:\ffmpeg\bin\ffmpeg.exe'
+ffprobe_path = r'C:\ffmpeg\bin\ffprobe.exe'
+
 if debug or show_plt:
     print(f'Alt: debug {debug}, show intensity plot {show_plt}')
 print('Sync ready.\n')
 
 def get_video_info(path):
-    cmd = [r'C:\ffmpeg\bin\ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=nb_frames,r_frame_rate', '-of', 'csv=p=0', path]
+    cmd = [ffprobe_path, '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=nb_frames,r_frame_rate', '-of', 'csv=p=0', path]
     try:
         frame_rate, nb_frames = subprocess.check_output(cmd).decode().strip().split(',')
         if nb_frames == 'N/A': raise NotImplementedError(f"nb_frames_str returns N/A. {nb_frames}")
@@ -146,15 +149,23 @@ def process_videos(cfg):
         #out_path = f"{cfg.get('output_dir', 'output')}/{os.path.basename(m['path']).rsplit('.', 1)[0]}_aligned.mp4"
         out_path = os.path.join(cfg.get('output_dir', 'output'), m['output_name'])
         start_time = m['start_frame'] / m['fps']
-        ffmpeg_cmd = [r'C:\ffmpeg\bin\ffmpeg', '-y', '-i', m['path'], '-ss',
-                      f'{start_time:.6f}', '-frames:v', str(output_frames),
+        ffmpeg_cmd_cpu = [
+                      ffmpeg_path, 
+                      '-y', 
+                      '-i', m['path'], 
+                      '-ss', f'{start_time:.6f}', 
+                      '-frames:v', f'{output_frames}', #str(output_frames),
                       '-vf', f"scale={cfg['output_size'][0]}:{cfg['output_size'][1]}",
-                      '-c:v', 'libx264', '-preset', 'fast', '-movflags', '+faststart',
-                      '-crf', '18', out_path]
+                      '-c:v', 'libx264', 
+                      '-preset', 'fast', 
+                      '-movflags', '+faststart',
+                      '-crf', '18', 
+                      out_path
+                      ]
         # following cmd uses GPU accel. 
         # but recently the 4070s doesn't want to work and it falls back to CPU for unknown reason
-        ffmpeg_cmd = [
-                        'C:\\ffmpeg\\bin\\ffmpeg',
+        ffmpeg_cmd_gpu_nvenc = [
+                        ffmpeg_path,
                         '-y',
                         '-i', m['path'],
                         '-ss', f'{start_time:.6f}',
@@ -182,7 +193,15 @@ def process_videos(cfg):
         print(f"Now trimming video to {os.path.basename(out_path)}")
         # print(ffmpeg_cmd)
         if not debug:
-            result = subprocess.run(ffmpeg_cmd, check=True, stderr=subprocess.PIPE)
+            try:
+                result = subprocess.run(ffmpeg_cmd_gpu_nvenc, check=True, stderr=subprocess.PIPE)
+            except Exception as e:
+                print(f'Failed running ffmpeg w/ nvenc: {e}')
+                print('Falling back to cpu processing...')
+                try:
+                    subprocess.run(ffmpeg_cmd_cpu, check=True, stderr=subprocess.PIPE)
+                except Exception as e:
+                    raise RuntimeError(f'Failed running ffmpeg: {e}')
             # print(result.stderr)
         print(f"You've spent {int((time.time() - pstart_time) // 60)} mins {round((time.time() - pstart_time) % 60, 1)} secs here.\n")
 

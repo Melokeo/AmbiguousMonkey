@@ -3,8 +3,6 @@ A Great Unity of monkey task pipeline
 Run this in cmd with `conda activate monkeyUnity`
 Mel
 Feb 2025
-
-v1.6: re-structured and tidied up data property
 '''
 
 import os, shutil, re, time
@@ -15,90 +13,15 @@ from .utils import VidSyncAudV2 as SyncAud
 from pathlib import Path
 import subprocess
 import win32com.client
-
-class PathMngr:
-    def __init__(self, raw=None):
-        self._PPATH_RAW = None
-        self._vid_path = []
-        self._cfg_path = []
-        self._ani_base = None
-        self._calib_idx = []
-        if raw:
-            self.PPATH_RAW = raw
-
-    @property
-    def PPATH_RAW(self):
-        return self._PPATH_RAW
+from enum import Enum, auto
+from .utils.PathManager import PathMngr
     
-    @PPATH_RAW.setter
-    def PPATH_RAW(self, v):
-        if not v:
-            raise ValueError('None occurred in PPATH_RAW.setter')
-        if not os.path.exists(v):
-           #  print(f"ValueError(f'PPATH_RAW.setter Path not found: {v}')")
-           raise ValueError(f'PPATH_RAW.setter Path not found: {v}')
-        else:
-            self._PPATH_RAW = v
-        print(f"[LOG] Updated PPATH_RAW to {v}")
-    
-    @property
-    def data_path(self):
-        return self._PPATH_RAW.replace('DATA_RAW', 'DATA') if self._PPATH_RAW else None
-
-    @property
-    def animal(self):
-        pt = self._PPATH_RAW.split(os.sep)
-        animal = next((p for p in pt if p in ANIMALS), None)
-        if animal is None:
-            raise ValueError(f"Check animal name in raw path. Recognized names: {ANIMALS}")
-        return animal
-    
-    @property
-    def date(self):
-        return self._PPATH_RAW.split(os.sep)[-1]
-    
-    @property
-    def vid_path(self):
-        return self._vid_path
-    
-    @vid_path.setter
-    def vid_path(self, v):
-        if not isinstance(v, list):
-            raise ValueError(f'(Internal) Passed invalid vid_path {v}')
-        self._vid_path = v
-    
-    @property
-    def cfg_path(self):
-        return self._cfg_path
-    
-    @cfg_path.setter
-    def cfg_path(self, v):
-        if not isinstance(v, list):
-            raise ValueError(f'(Internal) Passed invalid cfg_path {v}')
-        self._cfg_path = v
-
-    @property
-    def ani_base_path(self):
-        return os.path.join(self.data_path, 'anipose')
-    
-    @property
-    def calib_idx(self):
-        return self._calib_idx
-    
-    @calib_idx.setter
-    def calib_idx(self, v):
-        self._calib_idx = v
-    
-    def show(self):
-        return f"""
-        --- Path Summary ---
-        Raw Path: {self.PPATH_RAW}
-        Data Path: {self.data_path}
-        Animal: {self.animal}
-        Date: {self.date}
-        Video Paths: {self.vid_path}
-        --------------------
-        """
+class Task(Enum):
+    All = auto()
+    TS = auto()
+    BBT = auto()
+    BRKM = auto()
+    Pull = auto()
 
 pstart_time = time.time()
 PPATH_RAW = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025\03\20250303' # path of today's raw data (eg P:\....02\05\20250205\). keep the r in front.
@@ -116,49 +39,32 @@ CAM_OFFSETS = {1: 0, 2: 459, 3: 567, 4: 608}
 ani_cfg_mothercopy = r"C:\Users\rnel\Documents\Python Scripts\config.toml"
 ani_cfg_mothercopy_add_ref = r"C:\Users\rnel\Documents\Python Scripts\config-ref.toml"
 ani_calib_mothercopy = r"C:\Users\rnel\Documents\Python Scripts\calibration.toml"
+ani_env_name = 'anipose-3d'
 Colab_path = r'G:\My Drive\MonkeyModels'
 model_path_colab = {'L': r'G:\My Drive\MonkeyModels\TS-L-shaved', 'R': r'G:\My Drive\MonkeyModels\TS-R-shaved'}
 camL = [1, 2]
 camR = [3, 4]
+ncams = 4
+hascam = [True] * ncams
 list_skipped_file_name = ['x', '-']
 pause_before_sync = True
 pause_before_dlc = True
-dlc_mdl_path = {
-    'L': r'C:\Users\rnel\Desktop\DLC\Model\TS-L',
-    'R': r'C:\Users\rnel\Desktop\DLC\Model\TS-R'
-    }
-dlc_cfg_path = {
-    'L': r'C:\Users\rnel\Desktop\DLC\Model\TS-L\config.yaml',
-    'R': r'C:\Users\rnel\Desktop\DLC\Model\TS-R\config.yaml'
-    }
-add_ref = False
-Ref = [
-        {
-            'Fx1': (564.7, 641.4, 1),
-            'Fx2': (487.2, 641.1, 1),
-            'Fx3': (487.7, 697.5, 1)
-        },
-        {
-            'Fx1': (963, 821.1, 1),
-            'Fx2': (881.4, 830.2, 1),
-            'Fx3': (879.5, 889, 1)
-        },
-        {
-            'Fx1': (576.1, 384.5, 1),
-            'Fx2': (642.9, 405.7, 1),
-            'Fx3': (647.3, 432.0, 1)
-        },
-        {
-            'Fx1': (776.3, 372.7, 1),
-            'Fx2': (851.5, 373.1, 1),
-            'Fx3': (861.7, 408.9, 1)
-        }]
-SCALE_FACTOR = 1 # only scales ref
+pm.dlc_mdl_path = {
+    'L': r'D:\DeepLabCut\TS-L-shaved-N',
+    'R': r'D:\DeepLabCut\TS-R-shaved-N',
+}
 vid_type = 'mp4'
 base_header = ['Experiment Number', 'Experiment', 'Task', 'VOID']
 xlsx_cam_header = ['Camera files \n(1 LR)','Camera files \n(2 LL)', 'Camera files (3 RR)', 'Camera files (4 RL)']
 first_run = True
 filename_cam_head = ['x','x','x','x']
+curr_task = Task.All
+task_match = {  # all should be lowercase
+    Task.BBT: ['bbt'],
+    Task.BRKM: ['brkm', 'brnk', 'brinkman', 'brikman', 'brickman'], # you wont misspell it, right??
+    Task.Pull: ['pull'],
+    Task.TS: ['touchscreen', 'touch screen', 'ts'],
+    }
 
 if __name__ != '__main__':
     module_path = os.path.dirname(__file__)
@@ -190,7 +96,8 @@ def dataSetup():
         sub_dir = [
             '\\SynchronizedVideos',
             '\\anipose',
-            '\\SynchronizedVideos\\SyncDetection'
+            '\\SynchronizedVideos\\SyncDetection',
+            '\\clean'
             ]
         for sd in sub_dir:
             os.makedirs((pm.data_path + sd), exist_ok = True)
@@ -199,7 +106,8 @@ def dataSetup():
         pass
 
 def _infoFromPath(PPATH_RAW):
-    pt = PPATH_RAW.split(os.sep)
+    path = Path(PPATH_RAW)
+    pt = path.parts
     date = pt[-1]
     animal = next((p for p in pt if p in ANIMALS), None)
     if animal == None:
@@ -240,17 +148,22 @@ def configSync(base_header=base_header, cam_header=xlsx_cam_header):
     vid_path = []
     cfg_path = []
     calib_idx = []
-    animal, date = _infoFromPath(pm.PPATH_RAW)
+    starts_aud = [] # stores audio sync info for comparison
+    animal, date = pm.animal, pm.date
+
     for _, row in df.iterrows():
-        experiment, task = row["Experiment"], str(row["Task"]).replace(' ', '')
+        experiment, task = str(row["Experiment"]), str(row["Task"]).replace(' ', '')
         if row['VOID'] == 'T':
             print(f'Void trial skipped: {experiment}, {task}')
             continue        # allows u to skip a trial
+        if curr_task != Task.All and not any([sub in experiment.lower() for sub in task_match[curr_task]]):
+            print(f'Less interesting task skipped: {experiment}, {task}')
+            continue
 
         vid_idx = []
         try:        # check we have enough videos to proceed & get the vid index
             missing_count = 0
-            for i in range(4):
+            for i in range(ncams):
                 cam_num = row[cam_header[i]]
                 if cam_num in list_skipped_file_name or cam_num=='NaN':
                     # camoff.append(-1)
@@ -283,15 +196,82 @@ def configSync(base_header=base_header, cam_header=xlsx_cam_header):
         
         if os.path.exists(task_root_path) and os.path.exists(os.path.join(task_root_path,'.skipDet')):
             print(f'Start frames are already detected in {os.path.basename(task_root_path)}, skipped')
+            starts_aud.append([])
+            continue
+
+        print(f'Testing start frame for {experiment}-{task}...')
+
+        vids = []
+        for cam in range(1, ncams+1):
+            cam_folder = os.path.join(pm.PPATH_RAW, f"cam{cam}")
+            n = int(vid_idx[cam-1])
+            if n == -1:     # we ensured at least 2 vids previously
+                continue
+
+            cam_vid_name = f"C{n:04}.mp4"
+            cam_video_path = os.path.join(cam_folder, cam_vid_name)
+            
+            vids.append(cam_video_path)
+
+        try:
+            sync_results = SyncAud.sync_videos(vids, fps=119.88, duration=30, start=0)
+            SyncAud.save_synced_waveforms(sync_results, sr=48000, fps=119.88, duration=10, tgt_path=os.path.join(pm.data_path, 'SynchronizedVideos\\SyncDetection'))
+            starts_aud.append([i[-1] for i in sync_results.values()])
+        except Exception as e:
+            raise RuntimeError(f'Error in SyncAud: {e}')
+    print(vid_path)
+    print(cfg_path)
+    print(starts_aud)
+
+    print('Audio sync complete. Now detecting LED frames...')
+    valid_row_idx = -1
+    for _, row in df.iterrows():            # YES. here copied the loop above
+        experiment, task = str(row["Experiment"]), str(row["Task"]).replace(' ', '')
+        if row['VOID'] == 'T':
+            print(f'Void trial skipped: {experiment}, {task}')
+            continue        # allows u to skip a trial
+        if curr_task != Task.All and not any([sub in experiment.lower() for sub in task_match[curr_task]]):
+            print(f'Less interesting task skipped: {experiment}, {task}')
+            continue
+
+        valid_row_idx += 1
+
+        vid_idx = []
+        try:        # check we have enough videos to proceed & get the vid index
+            missing_count = 0
+            for i in range(ncams):
+                cam_num = row[cam_header[i]]
+                if cam_num in list_skipped_file_name or cam_num=='NaN':
+                    # camoff.append(-1)
+                    # print(f'Missing video in {experiment}-{task} cam{i+1}')
+                    missing_count += 1
+                    vid_idx.append(-1)
+                    continue
+                else:
+                    vid_idx.append(cam_num)
+            if missing_count >= 3:
+                print(f'Crucial missing videos in {experiment}-{task}!')
+                continue # to next row
+        except Exception as e:
+            print(f'Error when fetching video file names from xlsx. Check header. Msg: {e}')
+            # exit('We dont know why but have to exit')
+            return
+
+        calib = True if "calib" in experiment.lower() else False
+        task_root_path = vid_path[valid_row_idx] 
+        sync_config_path = cfg_path[valid_row_idx]      # though indexing with intermediate, the two mainloops should enter in same order
+        
+        if os.path.exists(task_root_path) and os.path.exists(os.path.join(task_root_path,'.skipDet')):
+            print(f'Start frames are already detected in {os.path.basename(task_root_path)}, skipped')
             continue
 
         print(f'Testing start frame for {experiment}-{task}...')
 
         sync_param = [] # storing info for sync, every set of videos
 
-        # here is main loop to test LED frames
-        for cam in range(1, 5):
-            cam_folder = os.path.join(pm.PPATH_RAW, f"cam{cam}")
+        # here is main loop to test LED frames for one row
+        for cam in range(1, ncams+1):
+            cam_folder = os.path.join(pm.PPATH_RAW, f"cam{cam}")    # TODO change to configurable regex
             n = int(vid_idx[cam-1])
             if n == -1:     # we ensured at least 2 vids previously
                 continue
@@ -310,8 +290,11 @@ def configSync(base_header=base_header, cam_header=xlsx_cam_header):
             # here testing start frame based on LED
             if os.path.exists(cam_video_path):
                 if not calib:
-                    start_frame = Sync.find_start_frame(
-                        cam_video_path, ROIs[cam], THRES, LEDs[cam],os.path.join(pm.data_path,'SynchronizedVideos\\SyncDetection'))
+                    try:
+                        start_frame = Sync.find_start_frame(
+                            cam_video_path, ROIs[cam], THRES, LEDs[cam],os.path.join(pm.data_path,'SynchronizedVideos\\SyncDetection'))
+                    except Exception as e:
+                        raise RuntimeError(f'Error in SyncLED: {e}')
                 else: 
                     start_frame = -1
                 sync_param.append({
@@ -326,14 +309,13 @@ def configSync(base_header=base_header, cam_header=xlsx_cam_header):
                     f"Failed when looking for start frame: expected video {cam_video_path} of cam{cam} not found.")
             
         # Cross-validation w/ audio sync
-        vids = [i['path'] for i in sync_param]
         starts = [i['start'] for i in sync_param]
         print(f'Start frames: {starts}')
-        sync_results = SyncAud.sync_videos(vids, fps=119.88, duration=30, start=0)
-        SyncAud.save_synced_waveforms(sync_results, sr=48000, fps=119.88, duration=10, tgt_path=os.path.join(pm.data_path, 'SynchronizedVideos\\SyncDetection'))
-        starts_aud = [i[-1] for i in sync_results.values()]
+        sa = starts_aud[valid_row_idx]
+        assert len(sa)>0, f'There must be sth wrong in skipping mechanism with {experiment}, {task}'
+        # print(starts, sa)
+        starts, status = syncCrossValidation(starts=starts, starts_aud=sa)
 
-        starts, status = syncCrossValidation(starts, starts_aud)
         wng = {-1: "Two videos missing and two other valid ones deviate. Skipping trial.",
                -2: "Two or more videos deviate from audio sync. Skipping trial.",
                }
@@ -361,10 +343,13 @@ def configSync(base_header=base_header, cam_header=xlsx_cam_header):
         # empty .skip file to mark the folder as already processed
         with open(os.path.join(task_root_path, '.skipDet'), 'w') as f:  
             pass
+
     return vid_path, cfg_path, calib_idx
 
 def syncCrossValidation(starts: list, starts_aud: list):
-    # Compute offset estimate from valid LED starts
+    '''Compute offset estimate from valid LED starts'''
+    assert len(starts)==len(starts_aud), 'starts and starts_aud must have same length'
+
     valid_idx = [i for i, s in enumerate(starts) if s != -1]
     if valid_idx:
         offsets = [starts[i] - starts_aud[i] for i in valid_idx]
@@ -373,18 +358,24 @@ def syncCrossValidation(starts: list, starts_aud: list):
         offset_est = 0  # default; will be overridden in 4-missing case
 
     missing_idx = [i for i, s in enumerate(starts) if s == -1]
-    num_missing = len(missing_idx)
+    num_missing = len(missing_idx); print(0)
     
     if len(starts)<4:
-        if num_missing >= 1:
+        if len(starts) - num_missing < 2:
             return starts_aud, None
         else:
             deviations = [abs(starts[i] - (offset_est + starts_aud[i])) for i in range(2)]
             num_deviations = sum(dev > THRES_ERROR for dev in deviations)
-            if num_deviations == 1:
+            if len(starts) - num_missing - num_deviations < 2:
                 return None, -2
+            else:
+                for i in range(len(starts)):
+                    if abs(starts[i] - (offset_est + starts_aud[i])) > THRES_ERROR:
+                        starts[i] = offset_est + starts_aud[i]
+                return starts, None
 
     if num_missing > 0:
+        print(1)
         if num_missing == 1:
             # 1 missing: fill it from audio sync
             for i in missing_idx:
@@ -451,27 +442,57 @@ def syncVid(vid_path, cfg_path):
 
     print('=====Videos synchronized=====\n')
 
-def runDLC(vid_path):
+def runDLC(vid_path, shuffle=None, side=None):
     # DLC part. Can anyone send me the Dirt Rally DLCs??
     import deeplabcut # type: ignore
     print('DeepLabCut now loaded')
     # better logic needed here
 
-    for vid in vid_path:
+    if shuffle is None:
+        shuffle = [1, 1]
+    if side is None:
+        side  = ['L', 'R']
+
+    for i, vid in enumerate(vid_path):
+        if i in pm.calib_idx:
+            continue        # you dont want yourself to be tracked
+
         print(f'\nDLC analyzing {os.path.basename(vid)}...')
         try:
-            for p in ['L', 'R']:
+            for p in side:
                 if not os.path.exists(os.path.join(vid, p, '.skipDLC')):
                     print('=================NEW DLC ANAL=================\n(not *that* anal)')
-                    deeplabcut.analyze_videos(dlc_cfg_path[p], os.path.join(vid,p), videotype = vid_type)
+                    deeplabcut.analyze_videos(
+                        pm.dlc_cfg_path[p], 
+                        os.path.join(vid,p), 
+                        videotype=vid_type,           
+                        #trainingsetindex=,    
+                        shuffle=shuffle[p],
+                        cropping=None,
+                        # dynamic=(True, 0.5, 10),         #TODO and make this configurable
+                        auto_track=False,
+                        engine=deeplabcut.Engine.TF,
+                        )
                     with open(os.path.join(vid, p, '.skipDLC'), 'w') as f:  
                         pass
                 else:
                     print(f'Videos are already screwed in {vid}\\{p}, skipped\n')
         except Exception as e:
             raise RuntimeError(f'Main script: Failed in DLC analyse:\n{e}')
-        for p in ['L', 'R']:
-            deeplabcut.filterpredictions(dlc_cfg_path[p], os.path.join(vid,p), shuffle = 1, save_as_csv = True, videotype = vid_type)
+        for p in side:
+            deeplabcut.filterpredictions(
+                pm.dlc_cfg_path[p], 
+                os.path.join(vid,p), 
+                shuffle = shuffle[p],
+                save_as_csv=True,
+                videotype=vid_type,
+                filtertype="median",
+                #filtertype="arima",
+                #p_bound=0.01,
+                #ARdegree=3,
+                #MAdegree=1,
+                #alpha=0.01
+                )
             # deeplabcut.create_labeled_video(dlc_cfg_path[p], os.path.join(vid,p), videotype = vid_type, draw_skeleton = True)
     print('=====2D analyse finished=====\nDLC is happy. Are *you* happy?\n')
 
@@ -527,7 +548,7 @@ def pickupFromGoogle(animal, date):
                 print(f'Skipped copied folder {home}')
 
 # Now organize everything for anipose.
-def setupAnipose(ani_base_path, vid_path, Ref = Ref, add_ref=False):
+def setupAnipose(ani_base_path, vid_path, ignore_sync=True):
     """
     Organizes the data structure for Anipose 3D pose estimation.
     Args:
@@ -536,13 +557,17 @@ def setupAnipose(ani_base_path, vid_path, Ref = Ref, add_ref=False):
         Ref (list, optional): Reference points for calibration (default: Ref).
         add_ref (bool, optional): Whether to add reference points.
     """
-    global ani_cfg_mothercopy, ani_cfg_mothercopy_add_ref
+    global ani_cfg_mothercopy, ani_cfg_mothercopy_add_ref   # TODO tidy globals
     print('\nOrganizing for anipose')
-    mc = ani_cfg_mothercopy_add_ref if add_ref else ani_cfg_mothercopy
+    mc = ani_cfg_mothercopy
     shutil.copy(mc, os.path.join(ani_base_path, 'config.toml'))
     for vid in vid_path:
         if not os.path.exists(os.path.join(vid,'.skipSync')):
-            raise ValueError(f'Folder not marked as synchronized:\n{vid}')
+            if not ignore_sync:
+                raise ValueError(f'Folder not marked as synchronized:\n{vid}')
+            else:
+                print(f'Folder not marked as synchronized:\n{vid}')
+                continue
         trial_path = os.path.join(ani_base_path, os.path.basename(vid))
         os.makedirs(os.path.join(trial_path, 'calibration'), exist_ok = True)
         shutil.copy(ani_calib_mothercopy, os.path.join(trial_path, 'calibration', 'calibration.toml'))
@@ -561,15 +586,11 @@ def setupAnipose(ani_base_path, vid_path, Ref = Ref, add_ref=False):
                 cam = int(cam.split('DLC_resnet')[0][-1])
                 out_path = f.name
                 out_path = os.path.join(trial_path, 'pose-2d-filtered', out_path)
-                out_path = re.sub('DLC_resnet(101|50)_(TS|BBT).*shuffle1_\d+0000_filtered','',out_path)
+                out_path = re.sub('DLC_resnet(101|50)_(TS|BBT).*shuffle\d{1,2}_\d+0000_filtered','',out_path)
                 fr = str(f.resolve())
                 fr = fr.replace(r'\\share.files.pitt.edu\RnelShare', 'P:')
-                if add_ref:
-                    #h5r.add_fixed_points(fr, out_path, cam, Ref)
-                    pass
-                else:
-                    shutil.copy(fr, out_path)
-                    print(f'h5 copied {os.path.basename(fr)}')
+                shutil.copy(fr, out_path)
+                print(f'h5 copied {os.path.basename(fr)}')
     
 def runAnipose(ani_base_path, run_combined = False):
     """
@@ -580,7 +601,7 @@ def runAnipose(ani_base_path, run_combined = False):
     """
     try:
         print('Activating new conda env, could take a while...')
-        cmd = ['conda', 'activate', 'anipose_3d', '&&', 'P:', '&&', 'cd', ani_base_path, '&&', 'anipose', 'triangulate', '&&', 'anipose', 'label-3d']
+        cmd = ['conda', 'activate', ani_env_name, '&&', 'P:', '&&', 'cd', ani_base_path, '&&', 'anipose', 'triangulate', '&&', 'anipose', 'label-3d']
         subprocess.run(cmd, shell=True, check=True)
         #if input('Run label-combined? y/[n]:') == 'y':
         if run_combined:
@@ -648,7 +669,7 @@ def collectCalib():
                     shutil.copy(calibration_path, r'C:\Users\rnel\Documents\Python Scripts')
 
 if __name__ == '__main__':
-    updateOffset(list(CAM_OFFSETS.values()))
+    updateOffset(list(CAM_OFFSETS.values()))        #FIXME make it able to run standalone
     dataSetup()
     two_way_shortcuts(pm.data_path, pm.PPATH_RAW)
 
@@ -675,7 +696,7 @@ if __name__ == '__main__':
         {k: tuple(SCALE_FACTOR * v for v in val) for k, val in obj.items()}
         for obj in Ref
     ] # scale Ref's'''
-    setupAnipose(pm.ani_base_path, pm.vid_path, Ref, add_ref)
+    setupAnipose(pm.ani_base_path, pm.vid_path)
     runAnipose(pm.ani_base_path)
     
     print('Congrats on getting heeeeeeere!')

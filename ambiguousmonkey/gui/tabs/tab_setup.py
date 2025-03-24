@@ -41,9 +41,21 @@ class TabSetup(QWidget):
         self.animal_list = QLineEdit(",".join(mky.ANIMALS))
         layout.addRow("Animals:", self.animal_list)
         
-        self.header_key = QLineEdit(mky.HEADER_KEY)
-        layout.addRow("Header Key:", self.header_key)
+        ll = QHBoxLayout()
+        self.lbl_hdr_key = QLabel('Header Key:')
+        self.edt_header_key = QLineEdit(mky.HEADER_KEY)
+        ll.addWidget(self.lbl_hdr_key)
+        ll.addWidget(self.edt_header_key)
+        self.lbl_task = QLabel('Specified task:')
+        self.cmb_task = QComboBox()
+        # displayed_task_names = ['All', 'Touch screen', 'BBT', 'Brinkman', 'Pull']
+        for t in mky.Task:
+            self.cmb_task.addItem(t.name, t)
+        self.cmb_task.setCurrentText('All')
+        ll.addWidget(self.lbl_task)
+        ll.addWidget(self.cmb_task)
 
+        layout.addRow(ll)
         layout.addRow(self.btn_data_setup)
 
         self.data_setup_grp.setLayout(layout)
@@ -71,11 +83,21 @@ class TabSetup(QWidget):
         self.btn_today.clicked.connect(self.setPathToday)
         self.btn_path_refresh.clicked.connect(self.pathRefresh)
         self.btn_data_setup.clicked.connect(self.dataSetup)
+        self.cmb_task.currentIndexChanged.connect(self.changeTask)
         
     def update_raw_path(self):
         mem = mky.pm.PPATH_RAW
-        mky.pm.PPATH_RAW = self.raw_path.text()
         try:
+            mky.pm.PPATH_RAW = self.raw_path.text()
+        except FileNotFoundError as e:
+            print(f'Cannot update path: {e}')
+            print('Path **NOT** updated')
+            mky.pm.PPATH_RAW = mem
+            self.raw_path.setText(mky.pm.PPATH_RAW) 
+            return
+        try:
+            if mky.pm.PPATH_RAW != mem:
+                self.cmb_task.setCurrentIndex(self.cmb_task.findData(mky.Task.All))
             self.populateNonVoidRows()
         except Exception as e:
             print(f'Error updating task panes {e}')
@@ -107,7 +129,6 @@ class TabSetup(QWidget):
         self.update_raw_path()
     
     def dataSetup(self):
-        # self.df = mky.readExpNote(PPATH_RAW)
         if self.btn_data_setup.text() != 'Confirm by clicking again':
             self.btn_data_setup.setText('Confirm by clicking again')
             print(f'Will setup for {mky.pm.PPATH_RAW}!')
@@ -131,6 +152,10 @@ class TabSetup(QWidget):
                                                     'Camera files \n(1 LR)','Camera files \n(2 LL)', 'Camera files (3 RR)', 'Camera files (4 RL)'
                                                     ])     
         animal, date = mky.pm.animal, mky.pm.date
+
+        if mky.curr_task != mky.Task.All:
+            if not any(sub in cell.lower() for sub in mky.task_match[mky.curr_task] for cell in df['Experiment'].dropna()):
+                raise ValueError(f'Cannot find any task specifying "{mky.curr_task.name}"')
             
         # Remove existing widgets
         for i in reversed(range(self.non_void_layout.count())):
@@ -138,9 +163,11 @@ class TabSetup(QWidget):
             if widget:
                 widget.deleteLater()
 
-        flag_head = True
+        flag_head = [True] * mky.ncams
         for _, row in df.iterrows():
             if row["VOID"] == "T":  # Skip void rows
+                continue          
+            if mky.curr_task != mky.Task.All and not any([sub in row['Experiment'].lower() for sub in mky.task_match[mky.curr_task]]):
                 continue
 
             # Create a group box for each row
@@ -155,8 +182,10 @@ class TabSetup(QWidget):
             y = '✅'
             n = '❌'
             wng = '⚠️'
+            half = '🤔'
+            happy = '🎊'
             try:
-                for i in range(4):
+                for i in range(mky.ncams):  # TODO further adopt different ncams in UI.
                     try:
                         fname = f'C{int(row[mky.xlsx_cam_header[i]]):04}.{mky.vid_type}'
                         if os.path.exists(os.path.join(mky.pm.PPATH_RAW,f'cam{i+1}',fname)):
@@ -165,19 +194,15 @@ class TabSetup(QWidget):
                             c = f'{fname} {wng}'
                             print(f'{wng} Video not found for {row["Experiment"]}-{row["Task"]}!')
                         lt.addWidget(QLabel(f'Cam {i+1}: {c}'), 1, i)
+
+                        if flag_head[i]:
+                            mky.filename_cam_head[i] = (f'C{int(row[mky.xlsx_cam_header[i]]):04}.{mky.vid_type}')  # just used for ROI check
+                        if not "calib" in row["Experiment"].lower():
+                            flag_head[i] = False
+
                     except ValueError:
                         lt.addWidget(QLabel(f'Cam {i+1}: NOT ASSIGNED'), 1, i)
 
-                    if flag_head:
-                        mky.filename_cam_head[i] = (f'C{int(row[mky.xlsx_cam_header[i]]):04}.{mky.vid_type}')  # just used for ROI check
-                        '''if flag_head:
-                        fname = f'C{int(row[self.cam_header[i]]):04}.{mky.vid_type}'
-                        # if not os.path.exists(os.path.join(mky.pm.PPATH_RAW,f'cam{i+1}',fname)):
-                        #     raise FileNotFoundError(f'Video file {fname} not found for {row['Experiment']}-{row["Task"]}')
-                        mky.filename_cam_head[i] = (f'{fname}') if os.path.exists(os.path.join(mky.pm.PPATH_RAW,f'cam{i+1}',fname)) else (f'{fname}{n}')'''
-                if not "calib" in row["Experiment"].lower():
-                    flag_head = False
-                # print(mky.filename_cam_head)
             except Exception as e:
                 print(f"Error generating file name labels for {row['Experiment']}-{row['Task']}, check exp notes for cam files 1~4. {e}")
 
@@ -190,13 +215,13 @@ class TabSetup(QWidget):
             if c == 2:
                 stat.append(y)
             elif c == 1:
-                stat.append('🤔')
+                stat.append(half)
             else:
                 stat.append(n)
             if os.path.exists(os.path.join(mky.pm.data_path, 'anipose', f"{date}-{animal}-{row['Experiment']}-{row['Task']}",
                                                          "pose-3d",
                                                          f"{date}-{animal}-{row['Experiment']}-{row['Task']}.csv")):
-                stat.append(y+'🎊')
+                stat.append(y+happy)
             else:
                 stat.append(n)
             for i in range(4):
@@ -206,3 +231,16 @@ class TabSetup(QWidget):
             self.non_void_layout.addWidget(exp_group)
 
         self.non_void_layout.addStretch()
+
+        mky.hascam = [not x for x in flag_head]
+
+    def changeTask(self):
+        prev_task = mky.curr_task
+        mky.curr_task = self.cmb_task.currentData()
+        try:
+            self.populateNonVoidRows()
+            print(f'Updated to {mky.curr_task.name} only')
+        except ValueError as e:
+            print(f'Cannot specify task: {e}')
+            mky.curr_task = prev_task
+            self.cmb_task.setCurrentText(prev_task.name)

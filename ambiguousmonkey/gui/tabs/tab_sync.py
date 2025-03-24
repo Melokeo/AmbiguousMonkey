@@ -16,6 +16,11 @@ class TabSync(QWidget):
         self.initUI()
         self.setupConnections()
         self.log_area = log_area
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        for i, state in enumerate(mky.hascam):
+            self.sync_cam_chk[i].setChecked(state) # deactivate non-existing view by default
         
     def initUI(self):
         # Sync Tab
@@ -33,21 +38,21 @@ class TabSync(QWidget):
         self.roi_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addRow("Sync ROI config:", self.roi_table)
 
-        self.sync_cam_chk = []
-        self.sync_cam_btn_check = []
-        self.sync_cam_btn_set = []
-        self.sync_cam_cmb = []
+        self.sync_cam_chk:list[QCheckBox] = []
+        self.sync_cam_btn_check:list[QPushButton] = []
+        self.sync_cam_btn_set:list[QPushButton] = []
+        self.sync_cam_cmb:list[QComboBox] = []
         for j in range(2):
             cam_layout = QHBoxLayout()
             for i in range(1,3):
-                chk = QCheckBox(f"CAM {i+2*j}")
+                chk = QCheckBox(f"CAM {i + 2*j}")
                 chk.setChecked(True)
                 cam_layout.addWidget(chk)
                 btn1 = QPushButton("Check ROI")
                 btn2 = QPushButton("Set ROI")
                 cmb = QComboBox()
                 cmb.addItems(['Y', 'G'])
-                cmb.setCurrentText(mky.LEDs[i+2*j]) 
+                cmb.setCurrentText(mky.LEDs[i + 2*j]) 
                 cam_layout.addWidget(btn1)
                 cam_layout.addWidget(btn2)
                 cam_layout.addWidget(cmb)

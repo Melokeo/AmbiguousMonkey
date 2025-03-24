@@ -4,19 +4,22 @@ uses py 3.10 w/ pyqt6
 
 import sys
 from PyQt6.QtWidgets import *
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QIcon
 from .. import monkeyUnityv1_8 as mky
 from ..gui.style import DARK_STYLE
 from datetime import datetime
 from .tabs import tab_setup, tab_sync, tab_dlc, tab_anipose, tab_tool
+from importlib import resources
 
 class PipelineGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUI()
+        with resources.path('ambiguousmonkey.gui', 'ambmky.ico') as icon:
+            self.setWindowIcon(QIcon(str(icon)))
         
     def initUI(self):
-        self.setWindowTitle("Monkey Unity Pipeline v1.5")
+        self.setWindowTitle("Ambiguous Monkey")
         self.setGeometry(100, 100, 750, 630)
         self.setStyleSheet(DARK_STYLE)
 

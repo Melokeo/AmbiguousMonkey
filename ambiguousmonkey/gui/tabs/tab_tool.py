@@ -6,7 +6,7 @@ import os, sys
 from PyQt6.QtWidgets import *
 from ... import monkeyUnityv1_8 as mky
 from ...utils.workers import RunCalibrationWorker
-import openpyxl, shutil
+import openpyxl, shutil, filecmp
 import subprocess
 from pathlib import Path
 
@@ -34,10 +34,20 @@ class TabTool(QWidget):
         lt.addRow(self.btn_xlsx_fill)
         self.btn_vid_player = QPushButton('Event Marker / Vid Player')
         lt.addRow(self.btn_vid_player)
+        self.btn_calib = QPushButton('Run calibration')
+        lt.addRow(self.btn_calib)
+        self.btn_csv = QPushButton('Collect CSVs')
+        lt.addRow(self.btn_csv)
+        self.btn_fullauto = QPushButton('Full Auto - Fire at Will!')
+        self.btn_fullauto.setEnabled(False)
+        lt.addRow(self.btn_fullauto)
     
     def setupConnections(self):
         self.btn_xlsx_fill.clicked.connect(self.fillExpNote)
         self.btn_vid_player.clicked.connect(self.runVidPlayer)
+        self.btn_calib.clicked.connect(self.btnCalibClicked)
+        self.btn_csv.clicked.connect(self.collectCSV)
+        #self.btn_fullauto.clicked.connect(self.fullAuto)
         
     def fillExpNote(self):
         return
@@ -81,6 +91,20 @@ class TabTool(QWidget):
             
         wb.save(os.path.join(os.path.dirname(path), f'{os.path.basename(path)}'))
         wb.close()
+    
+    def btnCalibClicked(self):
+        if len(mky.pm.calib_idx) != 0:
+            vid_path_ = []
+            folder_name = []
+            for i, v in enumerate(mky.pm.vid_path):
+                if i in mky.pm.calib_idx:
+                    path = Path(v)
+                    vid_path_.append(path.resolve())
+                    folder_name.append(path.name)
+            if len(vid_path_)>0:
+                self.sendToCalib(vid_path_=vid_path_, folder_name=folder_name)
+        else:
+            print('No calib found in current task set.')
 
     def sendToCalib(self, vid_path_: list, folder_name=['Calib']):
         '''
@@ -105,8 +129,8 @@ class TabTool(QWidget):
                 calibration_path = os.path.join(dirpath, "calibration", "calibration.toml")
                 if os.path.isfile(calibration_path):
                     parent_folder = os.path.basename(dirpath)
-                    shutil.copy(calibration_path, os.path.join(r'C:\Users\mkrig\Documents\Python Scripts\calib history', f'calibration-{parent_folder}.toml')) # FIXME change path
-                    shutil.copy(calibration_path, r'C:\Users\mkrig\Documents\Python Scripts')
+                    shutil.copy(calibration_path, os.path.join(r'C:\Users\mkrig\Documents\calib history', f'calibration-{parent_folder}.toml')) # FIXME change path
+                    shutil.copy(calibration_path, r'C:\Users\mkrig\Documents')
         self.run_calib_worker.deleteLater()
 
     def runVidPlayer(self):
@@ -115,6 +139,32 @@ class TabTool(QWidget):
         p = os.path.join(p, 'utils', script_name_vid_player)
         subprocess.Popen([sys.executable, p])
         self.log_area.append(f'Started standalone event marker.')
+
+    def collectCSV(self):
+        src = Path(mky.pm.ani_base_path)
+        dst = Path(mky.pm.data_path) / 'clean'  #TODO clean hardcoded
+        dst.mkdir(parents=True, exist_ok=True)
+
+        for f in src.rglob('*.csv'):
+            tgt = dst / f.name
+            if tgt.exists():
+                if filecmp.cmp(f, tgt, shallow=False):
+                    print(f'Skipped existing CSV: {f.stem}')
+                    continue
+                stem, suffix = f.stem, f.suffix
+                i = 1
+                while True:     # keep all the versions and rename new ones
+                    tgt_new = dst / f"{stem}_{i}{suffix}"
+                    if not tgt_new.exists():
+                        tgt = tgt_new
+                        break
+                    i += 1
+
+            shutil.copy(f, tgt)
+            print(f'Copied CSV: {f.stem}')
+
+        else:
+            print('No CSV found. Nothing is copied.')
 
     def fullAuto(self):
         try:

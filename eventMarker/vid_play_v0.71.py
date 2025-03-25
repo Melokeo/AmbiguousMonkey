@@ -82,6 +82,7 @@ PAIRING = True
 PAIRING_RULES = {1:2}
 TIMELINE_OFFSET = [5, 15]
 MAGIC = 3   # yes, magic.
+WIN_TITLE = "Event Marker (WTH ver.)"
 
 class QIVideoWidget(QVideoWidget):
     def __init__(self, parent=None):
@@ -209,7 +210,7 @@ class MarkersWidget(QWidget):
 class VideoPlayer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Event Marker (WTH ver.)")
+        self.setWindowTitle(WIN_TITLE)
         self.setGeometry(100, 100, 1420, 750)
 
         self.media_player = QMediaPlayer()
@@ -362,6 +363,7 @@ class VideoPlayer(QMainWindow):
         if file_name:
             self.media_player.setSource(QUrl.fromLocalFile(file_name))
             self.fname = file_name
+            self.setWindowTitle(' - '.join([WIN_TITLE, os.path.basename(file_name)]))
             self.play_btn.setEnabled(True)
             self.play_btn.setText("▶")
 

@@ -46,7 +46,7 @@ Contributed by: deepseek-r1, chatgpt-4o, Mel
 Feb 2025
 '''
 
-import sys, os, re
+import sys, os, re, ast
 import configparser as cfgp
 from PyQt6.QtCore import Qt, QUrl, QTime, QTimer, QEvent, QRectF, QPointF
 from PyQt6.QtGui import QAction, QKeyEvent, QPainter, QColor, QTransform
@@ -62,10 +62,14 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QFileDialog,
     QSizePolicy,
+    QMenu,
     QStyle
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
+from collections import defaultdict
+from datetime import datetime
+from functools import partial
 
 MARKER_COLORS = [
             QColor(172, 157, 147), 
@@ -82,6 +86,8 @@ PAIRING = True
 PAIRING_RULES = {1:2}
 TIMELINE_OFFSET = [5, 15]
 MAGIC = 3   # yes, magic.
+WIN_TITLE = "Event Marker (WTH ver.)"
+DEFAULT_WRKPATH = r'P:\projects\monkeys\Chronic_VLL\DATA\Pici'
 
 class QIVideoWidget(QVideoWidget):
     def __init__(self, parent=None):
@@ -209,7 +215,7 @@ class MarkersWidget(QWidget):
 class VideoPlayer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Event Marker (WTH ver.)")
+        self.setWindowTitle(WIN_TITLE)
         self.setGeometry(100, 100, 1420, 750)
 
         self.media_player = QMediaPlayer()
@@ -221,6 +227,14 @@ class VideoPlayer(QMainWindow):
         self.frame_timer = QTimer()
         self.frame_timer.timeout.connect(self.update_position)
         self.markers_widget = MarkersWidget(self)
+
+        self.cfg = cfgp.ConfigParser()
+        try:
+            self.cfg.read('vidPlayerConfig.ini')
+            self.fname = self.cfg['Path'].get('last_path', r'C:\Users')
+        except Exception as e:
+            print(f'Warning: cannot read ini file when starting: {e}')
+            self.fname = 'C:/Users'
         
         self.init_ui()
         self.connect_signals()
@@ -230,14 +244,6 @@ class VideoPlayer(QMainWindow):
         self.event_markers = {i: [] for i in range(1, 6)}
         self.undo_stack = []
         self.redo_stack = []
-
-        self.cfg = cfgp.ConfigParser()
-        try:
-            self.cfg.read('vidPlayerConfig.ini')
-            self.fname = self.cfg['Path'].get('last_path', r'C:\Users')
-        except Exception as e:
-            print(f'Warning: cannot read ini file when starting: {e}')
-            self.fname = 'C:/Users'
         
         app.installEventFilter(self)
 
@@ -292,7 +298,67 @@ class VideoPlayer(QMainWindow):
         open_action.triggered.connect(self.open_file)
         file_menu.addAction(open_action)
 
+        open_events_action = QAction("Read saved events", self)
+        open_events_action.triggered.connect(self.loadEvents)
+        file_menu.addAction(open_events_action)
+
+        workpath = self.cfg['Path'].get('workpath',
+                                         os.path.join(DEFAULT_WRKPATH,
+                                                      datetime.today().strftime('%Y'),
+                                                      datetime.today().strftime('%m')))
+        if os.path.exists(workpath):
+            self.add_video_menu(workpath) 
+        else:
+            print('Warning: video path not exist. Menu is not updated')
+
         self.setFocus()
+
+    def add_video_menu(self, base_path: str):
+        """Build a menu of all .mp4 files in base_path, grouped by top-two folders."""
+        video_menu = self.menuBar().addMenu("Videos")
+        structure = defaultdict(lambda: defaultdict(list))
+
+        # Collect .mp4 files in a nested dict {folder1: {folder2: [file_paths]}}
+        for root, dirs, files in os.walk(base_path):
+            for f in files:
+                if f.lower().endswith('.mp4'):
+                    full_path = os.path.join(root, f)
+                    rel_parts = os.path.relpath(full_path, base_path).split(os.sep)
+                    folder1 = rel_parts[0] if len(rel_parts) > 0 else "Unknown1"
+                    folder2 = rel_parts[1] if len(rel_parts) > 1 else "Unknown2"
+                    structure[folder1][folder2].append(full_path)
+
+        # Build submenus:
+        self.menuBar().setUpdatesEnabled(False)
+
+        for folder1 in sorted(structure):
+            sub_menu1 = QMenu(folder1, self)
+            video_menu.addMenu(sub_menu1)
+            for folder2 in sorted(structure[folder1]):
+                sub_menu2 = QMenu(folder2, self)
+                sub_menu1.addMenu(sub_menu2)
+                for fpath in sorted(structure[folder1][folder2]):
+                    action = sub_menu2.addAction(os.path.basename(fpath))
+                    action.triggered.connect(partial(self.on_file_chosen, fpath))
+
+        self.menuBar().setUpdatesEnabled(True)
+
+    def on_file_chosen(self, file_path: str):
+        """Handle clicking on a file from the Videos menu."""
+        if hasattr(self, 'fname'):
+            self.saveEventToFile()       # in case you open another file after marking one
+            # Event markers storage
+            self.event_markers = {i: [] for i in range(1, 6)}
+            self.undo_stack = []
+            self.redo_stack = []
+
+        if file_path:
+            self.media_player.setSource(QUrl.fromLocalFile(file_path))
+            self.fname = file_path
+            self.setWindowTitle(' - '.join([WIN_TITLE, os.path.basename(file_path)]))
+            self.play_btn.setEnabled(True)
+            self.play_btn.setText("▶")
+
 
     def eventFilter(self, obj, event):
         try:
@@ -362,8 +428,24 @@ class VideoPlayer(QMainWindow):
         if file_name:
             self.media_player.setSource(QUrl.fromLocalFile(file_name))
             self.fname = file_name
+            self.setWindowTitle(' - '.join([WIN_TITLE, os.path.basename(file_name)]))
             self.play_btn.setEnabled(True)
             self.play_btn.setText("▶")
+            
+    def loadEvents(self):
+        file_name, _ = QFileDialog.getOpenFileName(self, "Select event file", 
+            os.path.dirname(self.fname), "Text file (*.txt)")
+        if file_name:
+            # if os.path.basename(file_name).split('.')[-1] == 'txt':
+            try:
+                with open(file_name, 'r') as f:
+                    self.event_markers = ast.literal_eval(f.read())
+            except Exception as e:
+                pass
+            else:
+                self.undo_stack.clear()
+                self.redo_stack.clear()
+                self.markers_widget.update()    
 
     def toggle_play(self):
         if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -529,7 +611,7 @@ class VideoPlayer(QMainWindow):
     
     def saveEventToFile(self):
         # skip it if nothing marked
-        if any(self.event_markers.values()):
+        if any(self.event_markers.values()) and len(self.redo_stack)+len(self.undo_stack)>0:
             assert hasattr(self, 'fname')
             try:
                 if not os.path.exists('Marked Events'):

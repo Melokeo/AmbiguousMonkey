@@ -1,4 +1,4 @@
-# monkeyUnity
+# Ambiguous Monkey
 
 Mel Xu, Feb 2025
 
@@ -12,13 +12,13 @@ Packages mainly used: DeepLabCut, Anipose
 
 Digitally immortalize your monkeys in all their moving glory.
 
-| Script               | Description                                                  |
+| Script component     | Description                                                  |
 | -------------------- | ------------------------------------------------------------ |
 | `monkeyGUIv3_2.py`   | A pipeline GUI for data management and processing by calling `monkeyUnityv1_6.py` |
-| `monkeyUnityv1_6.py` | Where the automation happens. Support command line usage.    |
+| `monkeyUnityv1_8.py` | Where the automation happens. Support command line usage.    |
 | `VidSyncLEDv2_3.py`  | Synchronize videos according to LED status in ROI            |
 | `ROIConfig-full.py`  | A little helper script to select ROIs for LED detection      |
-| eventMarker          | A PyQt5-based video player with up to 5 marker sets, by which one can mark movement events |
+| `eventMarker`        | A PyQt5-based video player with up to 5 marker sets, by which one can mark movement events |
 
 ![IMG_2740](https://github.com/user-attachments/assets/038a6a96-710f-45dd-b5cb-3c90e1013809)
 
@@ -27,12 +27,11 @@ Digitally immortalize your monkeys in all their moving glory.
 
 ## Usage
 
-start environment `monkeyUnity` from Anaconda, if `conda` doesn't work in cmd.
+In Anaconda prompt, use
 
 ```bash
-conda activate monkeyUnity
-cd "Documents\Python Scripts"
-python monkeyGUIv3_2.py
+conda activate <env_name>
+python -m ambiguousmonkey
 ```
 
 And you should see the app.
@@ -42,28 +41,64 @@ Typical usage:
 ### Tab Data Setup
 
 1. Be sure that the experiment notes are filled, especially columns in `['Experiment Number', 'Experiment', 'Task', 'Camera files \n(1 LR)','Camera files \n(2 LL)', 'Camera files (3 RR)', 'Camera files (4 RL)', 'VOID']`
+
 2. Set **`data path`**, 3 ways: input and enter; browse; click **"`Today`"** if processing today's data. You should see a scroll area updated below with info panes about tasks from the data. eg, TS-1, TS-2, TS-3.
+
 3. Click "**`Setup Data Folder`**" **TWICE**. This calls `mky.dataSetup()` and updates internal path variables.
+
+4. Exceptions:
+
+   | Case                    | Problem                                                      | Possible solution                                            |
+   | ----------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+   | Cannot update data path | See description in log area.                                 | Check the data path exists, no typo, and can be accessed.    |
+   | C0xxx.mp4⚠️              | Non-existing video: video file in the experiment note doesn't exist | Check the videos are indeed copied to the correct **date** and **camera number** folder; Check file names are correct in the **note** |
+   | nan-nan                 | empty lines are read from the note                           | Check the note; there must be sth in that line. Delete the useless cells, or put a `T` in the VOID row to skip it. |
+   | NOT ASSIGNED            | video file noted for that task&cam is empty, or x.           | It's okay, as long as you have 2 files from same side (cam 1/2 or cam 3/4) |
 
 ### Tab Video Sync
 
 1. Go through all the four "**`Check ROI`**" to confirm LEDs are in the ROI area. This calls `ROIConfig.show_saved_rois()`
+
    - If not, click "**`Set ROI`**" and draw the LED area. Also change the LED color (Y=Yellow, G=Green) if needed. Color will affect HSV mask applied in detection.
    - Currently sync must have 4 cams. Can be implemented later. The checkboxes are reserved for that.
+
 2. Click "**`Detect LED`**". **Don't click more than once** since I didn't write a good thread handling here.
+
 3. You can check `\SynchronizedVideos\SyncDetection` to confirm detection.
-4. Click "**`Run Sync`**". **Don't click more than once** since I didn't write a good thread handling here.
+
+4. Click "**`Run Sync`**".
+
+5. Parameters
+
+   | Param                   | Range       | Default | Comment                                                      |
+   | ----------------------- | ----------- | ------- | ------------------------------------------------------------ |
+   | LED Threshold           | [0,255]     | 175     | Threshold of detection in the color-masked image. The higher the stricter on brightness. It's good by default. |
+   | Audio Detection len (s) | [15,240]    | 60      | Length of audio track used in multi-alignment. 30s will be faster. |
+   | Audio thres             | [1.00,3.00] | 1.20    | Threshold of alignment peak to be considered dominant. Calculated by the peak correlation / mean correlation in the moving sequence alignment. The higher the stricter. Dominance less than this will cause a warning for false alignment. |
+   | Override existing sync  | T,F         | F       | Re-run all the sync detection regardless of .skipDet file    |
+
+6. Common detection problems
+
+   | Case                                                         | Problem                                                      | Possible solution                                            |
+   | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+   | Possible false sync. Peak dominance = 1.0xxx...              | The correlation peak is not dominant enough to be considered a successful alignment | Most likely: wrong videos are grouped together. Less likely: videos are too quite to align audios. 1. Check the file names **in the note** is correct. No inversion, no mismatch. 2. increase detection len or lower audio thres, if you believe the videos are correct. 3. Check "override .. sync" and run detection again. 4. Check waveform output in `SynchronizedVideos\SyncDetection` folder to check correct alignment. |
+   | Warning: All videos missing LED start detection. Filling with audio sync and shifting to ensure >=1. | No LED is detected. The videos will be aligned to the video that started the latest | If LED is truly lit, check that ROIs cover LED region.       |
+   | [WARNING] No lit frame found in Cxxxx.mp4 within <number> frames! | No LED is detected within given frame range.                 | No action needed. Up to 3 files can have missing detection; they will be corrected with audio sync results. You can also check ROI. |
+   | Warning: Two videos missing and valid ones deviate. Skipping trial. | The detection in two videos disagree; cannot decide the event to align to. most likely due to a trigger sent *before* video started | Rare case. check ROIs to ensure detection of LEDs as much as possible; If cannot fix this way, refer to the output array at the end of audio sync part in the log area and correct the json file (`SynchronizedVideos\Taskname\Sync_xxxx.json`) start frame number. |
+   | Warning: Three videos missing start detection. Filling missing with the only valid start. | Can detect LED from only one video                           | No action needed. But it's recommended to re-select ROIs.    |
+   | --                                                           | --                                                           | Other doubts you can check the logic in `syncCrossValidation()` in `monkeyUnity.py`. |
 
 ### Tab DeepLabCut
 
-1. Switch the radio button to local or Colab
-2. Check model folder for left and right cam groups are what you need
-3. Run DLC
+1. Switch the radio button to local or Colab;
+2. Check model folder for left and right cam groups are what you need;
+3. Check the model trainset and shuffle number to use in the drop-down (local only);
+4. Run DLC
    - Local: There's only one button that looks like a run button
    - Colab
      - Click "**`Move .. to Colab`**". Wait for the videos to be copied to google drive.
      - Go to Colab and run DLC there.
-     - Come back after done in Colab, click "**`Fetch .. Colab`**". Wait for the script to pickup *.h5 from google drive. It runs according to animal and date, as given by data path (`self.PPATH_RAW `, `mky.PPATH_RAW`).
+     - Come back after done in Colab, click "**`Fetch .. Colab`**". Wait for the script to pickup *.h5 from google drive. It runs according to animal and date, as given by data path (`mky.pm.animal ` and `mky.pm.date `).
 
 ### Tab Anipose
 
@@ -72,11 +107,16 @@ Typical usage:
 3. Click **`Setup anipose folder`**. Wait for it to make files.
 4. Click **`Run anipose!`**. Check progress in cmd.
 
+### Tab Tools
+
+- Event marker: a frame-by-frame event marker for further analysis.
+- Run calibration: collect today's videos that contains name "calib" and run anipose calibration. But the calibration will NOT be auto collected or updated for anipose auto-run currently.
+
 ### Bypass usage
 
 If started midway (ie, ran halfway and restarted the GUI) (eg. closed the GUI during Colab processing):
 
-- Before running anything in tab "DLC" or "anipose", click **Detect LED** in Tab Video Sync. This updates internal `self.vid_path`, or it might raise AttributeError.
+- Because of an internal variable used to record tasks (`mky.pm.vid_path:list[str]`), **before running anything** in tab "DLC" or "anipose", click **Detect LED** in Tab Video Sync. 
 
 - If you want to re-run any step, delete corresponding checkpoint files:
 
@@ -87,12 +127,10 @@ If started midway (ie, ran halfway and restarted the GUI) (eg. closed the GUI du
   | Run Sync          | .skipSync          | `SynchronizedVideos\*task*`, each task (4 vids) has a file   | once a set of 4 vids are sync-ed                        |
   | DeepLabCut        | .skipDLC           | `SynchronizedVideos\*task*\L` or `SynchronizedVideos\*task*\R`, every 2 vids have a file | once DLC processed **two** of the videos in same folder |
   | Move to Colab     | .inColab           | `SynchronizedVideos\*task*\L` or `SynchronizedVideos\*task*\R`, every 2 vids have a file | once all videos in the folder are copied                |
-  | Setup anipose     | -                  | it moves videos (not copy) so won't run twice.               | -                                                       |
-  | anipose           | -                  | anipose skips processed tasks itself                         | -                                                       |
+  | Setup anipose     | -                  | it moves videos (not copy) so won't run twice. If videos are needed in sync folder, run sync again. | -                                                       |
+  | anipose           | Folder `\anipose\` | anipose skips processed tasks itself                         | -                                                       |
 
 ## Component Hierarchy
-
-No, no MVC/MVVM. Hope you don't debug it.
 
 If, unfortunately, someone is debugging,
 
@@ -110,11 +148,12 @@ If, unfortunately, someone is debugging,
 
   - go to corresponding .py file under `C:\Users\rnel\Documents\Python Scripts`
 
-    | Module               | Source               |
-    | -------------------- | -------------------- |
-    | `mky`                | `monkeyUnityv1_5.py` |
-    | `ROIConfig`          | `ROIConfig.py`       |
-    | `Sync` used in `mky` | `VidSyncLEDv2_3.py`  |
+    | Module                  | Source               |
+    | ----------------------- | -------------------- |
+    | `mky`                   | `monkeyUnityv1_5.py` |
+    | `ROIConfig`             | `ROIConfig.py`       |
+    | `Sync` used in `mky`    | `VidSyncLEDv2_3.py`  |
+    | `SyncAud` used in `mky` |                      |
 
 ```scss
 PipelineGUI (QMainWindow) ── initUI(), setupConnections()
@@ -364,4 +403,3 @@ pass
 # `ROIConfig`
 
 pass
-

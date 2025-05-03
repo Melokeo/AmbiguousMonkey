@@ -67,13 +67,18 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QMenu,
     QStyle,
-    QStatusBar
+    # QStatusBar,
+    QComboBox,
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from collections import defaultdict
 from datetime import datetime
 from functools import partial
+import numpy as np, csv
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 MARKER_COLORS = [
             QColor(172, 157, 147), 
@@ -93,6 +98,112 @@ MAGIC = 3   # yes, magic.
 WIN_TITLE = "Event Marker (N'amløpau ver.)"
 DEFAULT_WRKPATH = r'P:\projects\monkeys\Chronic_VLL\DATA\Pici'
 MARKER_KEY = [Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3, Qt.Key.Key_4, Qt.Key.Key_5]
+
+class CSVPlotWindow(QWidget):
+    def __init__(self, player):
+        super().__init__(player, Qt.WindowType.Window | Qt.WindowType.Tool)
+        self.player:VideoPlayer = player
+        self.setWindowTitle("CSV Plot")
+        self.setFixedSize(1500, 200)              # wide & short
+        layout = QVBoxLayout(self)
+
+        # top: load button + column selector
+        hl = QHBoxLayout()
+        self.load_btn = QPushButton("Load CSV")
+        self.combo    = QComboBox()
+        hl.addWidget(self.load_btn)
+        hl.addWidget(self.combo)
+        layout.addLayout(hl)
+
+        # bottom: horizontal matplotlib canvas
+        self.fig = Figure(figsize=(8,1.5))
+        self.ax  = self.fig.add_subplot(111)
+        self.canvas = FigureCanvas(self.fig)
+        self.line, = self.ax.plot([], [], lw=1)
+        self.ax2 = self.ax.twinx()
+        self.diff_line, = self.ax2.plot([], [], lw=1, linestyle='--')
+        self.cursor_line = self.ax.axvline(0, color='red')
+        layout.addWidget(self.canvas)
+
+        self.data = {}
+        self.data_diff = {}
+        self.win_size = 1200
+
+        # signals
+        self.load_btn.clicked.connect(self._load_csv)
+        self.combo.currentTextChanged.connect(self._update_plot)
+        player.media_player.positionChanged.connect(self._on_position)
+
+        # allow clicks on the plot
+        self.canvas.mpl_connect("button_press_event", self._on_click)
+
+    def _load_csv(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Select CSV", "", "CSV Files (*.csv)")
+        if not path: return
+        with open(path) as f:
+            reader = csv.reader(f)
+            headers = next(reader)
+            cols = list(zip(*reader))
+
+        self.data.clear()
+        self.combo.blockSignals(True)
+        self.combo.clear()
+        for h, col in zip(headers, cols):
+            try:
+                arr = np.array(col, float)
+                self.data[h] = arr
+                self.data_diff[h] = np.diff(arr, prepend=arr[0])
+                # self.data_diff[h] = np.diff(self.data_diff[h], prepend=self.data_diff[h][0])
+                self.combo.addItem(h)
+            except ValueError:
+                pass
+        self.combo.blockSignals(False)
+        if self.combo.count(): 
+            self.combo.setCurrentIndex(0)
+            self._update_plot()
+
+    def _on_position(self, ms):
+        frame = int(round(ms * FPS_ORIG / 1000))
+        self._draw(frame)
+
+    def _update_plot(self, name=None):
+        self.cur_name = self.combo.currentText()
+        arr = self.data[self.cur_name]
+        diff = self.data_diff[self.cur_name]
+        self.ax.set_ylim(arr.min(), arr.max())
+        self.ax2.set_ylim(diff.min(), diff.max())
+        frame = int(round(self.player.media_player.position() * FPS_ORIG / 1000))
+        self._draw(frame)
+
+    def _draw(self, frame):
+        if not hasattr(self, 'cur_name'): return
+        arr  = self.data[self.cur_name]
+        diff = self.data_diff[self.cur_name]
+        half = self.win_size // 2
+        lo   = max(frame - half, 0)
+        hi   = min(frame + half, len(arr))
+
+        # update data
+        x = np.arange(lo, hi)
+        y = arr[lo:hi]
+        self.line.set_data(x, y)
+        self.cursor_line.set_xdata(frame)
+
+        ydiff = diff[lo:hi]
+        self.diff_line.set_data(x, ydiff)
+
+        # slide x-window
+        self.ax.set_xlim(lo, hi)
+        # (y-limits already locked in _update_plot)
+
+        # lightweight redraw
+        self.canvas.draw_idle()
+
+    def _on_click(self, ev):
+        if ev.xdata is None: return
+        tgt = int(round(ev.xdata))
+        pos = int(round(tgt * 1000 / FPS_ORIG))
+        self.player.media_player.setPosition(pos)
 
 class QIVideoWidget(QVideoWidget):
     def __init__(self, parent=None):
@@ -252,6 +363,10 @@ class VideoPlayer(QMainWindow):
         self.move(self.settings.value("window/pos",  QPoint(100, 100), type=QPoint))
 
         self.fname = self.settings.value('Path/last_vid_path', None, type=str)
+     
+        self.csv_plot_win = CSVPlotWindow(self)
+        self.csv_plot_win.move(self.x()+20, self.y()+self.height()-170)
+        self.csv_plot_win.show()
         
         app.installEventFilter(self)
 
@@ -767,6 +882,7 @@ class VideoPlayer(QMainWindow):
                 self.delicate = not self.delicate
                 print(f"Combo marking mode {'ON' if self.delicate else 'OFF'}")
                 self.pending_num = None
+                self.pending_frame = None
                 self._update_delicate_label()
         else:
             super().keyPressEvent(event)
@@ -873,7 +989,7 @@ class VideoPlayer(QMainWindow):
                     type=str,
                     )
                 file_path = os.path.join(base_path, f'event-{fnm}.txt')
-                print(base_path, file_path)
+                # print(base_path, file_path)
 
                 if not os.path.exists(base_path):
                     os.makedirs(base_path)

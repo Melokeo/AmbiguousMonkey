@@ -5,15 +5,22 @@ Mel
 Feb 2025
 '''
 
-import os, shutil, re, time
-import pandas as pd
+import os
+import re
+import shutil
+import subprocess
+import time
+from datetime import datetime, timedelta
+from enum import Enum, auto
+from pathlib import Path
+
+import filecmp
 import json
+import pandas as pd
+import win32com.client
+
 from .utils import VidSyncLEDv2_3 as Sync
 from .utils import VidSyncAudV2 as SyncAud
-from pathlib import Path
-import subprocess
-import win32com.client
-from enum import Enum, auto
 from .utils.PathManager import PathMngr
     
 class Task(Enum):
@@ -22,9 +29,23 @@ class Task(Enum):
     BBT = auto()
     BRKM = auto()
     Pull = auto()
+    Calib = auto()
 
+BASE_DIR = os.path.dirname(__file__)
+print(BASE_DIR)
+debugging = False
 pstart_time = time.time()
-PPATH_RAW = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025\03\20250303' # path of today's raw data (eg P:\....02\05\20250205\). keep the r in front.
+ystd = datetime.today() - timedelta(days=1)
+today = datetime.now().strftime('%Y%m%d')
+PPATH_RAW = os.path.join(
+    r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici',
+    ystd.strftime('%Y'),
+    ystd.strftime('%m'),
+    ystd.strftime('%Y%m%d'),
+    )
+if not os.path.exists(PPATH_RAW):
+    PPATH_RAW = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025\04\20250403'
+                         # path of default raw data (eg P:\....02\05\20250205\). keep the r in front.
 pm = PathMngr(PPATH_RAW)
 ANIMALS = ['Pici']
 PATH_ANI_CFG = ''
@@ -36,9 +57,9 @@ THRES = 175
 THRES_ERROR = 5    # max tolerable error b/w audio and LED sync results
 OUTPUT_SIZE = [1920, 1080]
 CAM_OFFSETS = {1: 0, 2: 459, 3: 567, 4: 608}
-ani_cfg_mothercopy = r"C:\Users\rnel\Documents\Python Scripts\config.toml"
+ani_cfg_mothercopy = os.path.join(BASE_DIR, 'config.toml')
 ani_cfg_mothercopy_add_ref = r"C:\Users\rnel\Documents\Python Scripts\config-ref.toml"
-ani_calib_mothercopy = r"C:\Users\rnel\Documents\Python Scripts\calibration.toml"
+ani_calib_mothercopy = os.path.join(BASE_DIR, 'calibration.toml')
 ani_env_name = 'anipose-3d'
 Colab_path = r'G:\My Drive\MonkeyModels'
 model_path_colab = {'L': r'G:\My Drive\MonkeyModels\TS-L-shaved', 'R': r'G:\My Drive\MonkeyModels\TS-R-shaved'}
@@ -61,9 +82,11 @@ filename_cam_head = ['x','x','x','x']
 curr_task = Task.All
 task_match = {  # all should be lowercase
     Task.BBT: ['bbt'],
-    Task.BRKM: ['brkm', 'brnk', 'brinkman', 'brikman', 'brickman'], # you wont misspell it, right??
-    Task.Pull: ['pull'],
+    Task.BRKM: ['brkm', 'brnk', 'kman'], # you wont misspell it, right??
+    Task.Pull: ['pull', 'puul'],    # yes, someone once typed puul
     Task.TS: ['touchscreen', 'touch screen', 'ts'],
+    Task.Calib: ['calib'],
+    Task.All: ['']
     }
 
 if __name__ != '__main__':
@@ -85,10 +108,6 @@ def dataSetup():
     Automatically uses pm.PPATH_RAW
     """
     print(pm.animal, pm.date) 
-    '''data_path = os.path.join(
-        pt[0] + os.sep, *pt[1:pt.index("DATA_RAW")], "DATA",
-        *pt[pt.index("DATA_RAW"):]
-        ) if "DATA_RAW" in pt else exit("DATA_RAW not found in path.")'''
     # make folders
     # if not os.path.exists(data_path):
     if True: #input(f'Will set up folder in {data_path}, input y to continue: ') == 'y':
@@ -141,8 +160,48 @@ def readExpNote(PPATH_RAW=None, header=base_header+xlsx_cam_header, HEADER_KEY='
     print(f'\nFetched record from {xlsx_path}\n{df}')
     return df
 
+def getTasksInDAET(PPATH_RAW=None, HEADER_KEY:str='Experiment', task:Task=Task.All, skip_void=False) -> list[str]:
+    '''helper function: read exp note & return tasks in daet list'''
+    animal, date = _infoFromPath(PPATH_RAW)
+    df = getTasksInDict(PPATH_RAW, HEADER_KEY, task, skip_void)
+    # return experiment-task str
+    return [f'{date}-{animal}-{e}-{t}' for e,t in zip(df['Experiment'], df['Task'])]
+
+def getTasksInDict(PPATH_RAW=None, HEADER_KEY:str='Experiment', task:Task=Task.All, skip_void=False) -> list[str]:
+    '''helper function: read exp note & return tasks
+    Returns:
+        df[['Experiment', 'Task']]
+    '''
+    PPATH_RAW = PPATH_RAW or pm.PPATH_RAW
+    animal, date = _infoFromPath(PPATH_RAW)
+    xlsx_path = f'{PPATH_RAW}\\{animal}_{date}.xlsx'
+    try:
+        df = pd.read_excel(xlsx_path, header = None)
+    except FileNotFoundError:
+        print(f'getTasks() fileNotFoundErr: {xlsx_path}')
+        return None
+    # print(df)
+    header_idx = df[df.apply(
+        lambda row: row.astype(str).str.contains(HEADER_KEY, case = True, na = False).any(), axis = 1
+        )].index[0]
+    df = pd.read_excel(xlsx_path, header = header_idx)
+    if skip_void and 'VOID' in df.columns:
+        df = df[df['VOID'] != True]
+    try:
+        df = df[['Experiment', 'Task']]
+    except KeyError:
+        print("KeyError reading tasks with ['Experiment', 'Task']")
+        return None
+    
+    # --filter tasks--
+    pattern = '|'.join(re.escape(k) for k in task_match[task])
+    df = df[df['Experiment'].astype(str).str.contains(pattern, case = False, na = False)]
+    # print(df)
+
+    return df
+
 # sync videos
-def configSync(base_header=base_header, cam_header=xlsx_cam_header):
+def configSync(base_header=base_header, cam_header=xlsx_cam_header, override_skip=False, aud_test_len=60):
     h = base_header + cam_header
     df = readExpNote(pm.PPATH_RAW, header = h)
     vid_path = []
@@ -195,9 +254,12 @@ def configSync(base_header=base_header, cam_header=xlsx_cam_header):
             os.makedirs(os.path.join(task_root_path, 'R'), exist_ok = True)
         
         if os.path.exists(task_root_path) and os.path.exists(os.path.join(task_root_path,'.skipDet')):
-            print(f'Start frames are already detected in {os.path.basename(task_root_path)}, skipped')
-            starts_aud.append([])
-            continue
+            if override_skip:
+                print(f'Will overwrite sync results {os.path.basename(task_root_path)}...')
+            else:
+                print(f'Start frames are already detected in {os.path.basename(task_root_path)}, skipped')
+                starts_aud.append([])
+                continue
 
         print(f'Testing start frame for {experiment}-{task}...')
 
@@ -214,7 +276,7 @@ def configSync(base_header=base_header, cam_header=xlsx_cam_header):
             vids.append(cam_video_path)
 
         try:
-            sync_results = SyncAud.sync_videos(vids, fps=119.88, duration=30, start=0)
+            sync_results = SyncAud.sync_videos(vids, fps=119.88, duration=aud_test_len, start=0)
             SyncAud.save_synced_waveforms(sync_results, sr=48000, fps=119.88, duration=10, tgt_path=os.path.join(pm.data_path, 'SynchronizedVideos\\SyncDetection'))
             starts_aud.append([i[-1] for i in sync_results.values()])
         except Exception as e:
@@ -262,8 +324,11 @@ def configSync(base_header=base_header, cam_header=xlsx_cam_header):
         sync_config_path = cfg_path[valid_row_idx]      # though indexing with intermediate, the two mainloops should enter in same order
         
         if os.path.exists(task_root_path) and os.path.exists(os.path.join(task_root_path,'.skipDet')):
-            print(f'Start frames are already detected in {os.path.basename(task_root_path)}, skipped')
-            continue
+            if override_skip:
+                print(f'Will overwrite {os.path.basename(task_root_path)}...')
+            else:
+                print(f'Start frames are already detected in {os.path.basename(task_root_path)}, skipped')
+                continue
 
         print(f'Testing start frame for {experiment}-{task}...')
 
@@ -449,7 +514,8 @@ def runDLC(vid_path, shuffle=None, side=None):
     # better logic needed here
 
     if shuffle is None:
-        shuffle = [1, 1]
+        shuffle = {'L':1, 'R':1}
+        # shuffle = [1, 1]
     if side is None:
         side  = ['L', 'R']
 
@@ -557,7 +623,6 @@ def setupAnipose(ani_base_path, vid_path, ignore_sync=True):
         Ref (list, optional): Reference points for calibration (default: Ref).
         add_ref (bool, optional): Whether to add reference points.
     """
-    global ani_cfg_mothercopy, ani_cfg_mothercopy_add_ref   # TODO tidy globals
     print('\nOrganizing for anipose')
     mc = ani_cfg_mothercopy
     shutil.copy(mc, os.path.join(ani_base_path, 'config.toml'))
@@ -579,7 +644,8 @@ def setupAnipose(ani_base_path, vid_path, ignore_sync=True):
             for f in p.glob('*.mp4'):
                 fr = str(f.resolve())
                 fr = fr.replace(r'\\share.files.pitt.edu\RnelShare', 'P:')
-                shutil.move(fr, os.path.join(trial_path, 'videos-raw'))
+                if not os.path.exists(os.path.join(trial_path, 'videos-raw', f.name)):
+                    shutil.copy(fr, os.path.join(trial_path, 'videos-raw')) # copying is super inefficient
             for f in p.glob('*_filtered.h5'):
                 # shutil.move(f.resolve(), os.path.join(trial_path, 'pose-2d-filtered'))
                 cam = str(f.resolve())
@@ -592,13 +658,14 @@ def setupAnipose(ani_base_path, vid_path, ignore_sync=True):
                 shutil.copy(fr, out_path)
                 print(f'h5 copied {os.path.basename(fr)}')
     
-def runAnipose(ani_base_path, run_combined = False):
+def runAnipose(ani_base_path:str=None, run_combined = False):
     """
     Runs Anipose pipeline for triangulation and visualization.
     Args:
         ani_base_path (str): Path to the anipose project folder.
         run_combined (bool): If True, runs 'label-combined' after triangulation.
     """
+    ani_base_path = pm.ani_base_path if not ani_base_path else ani_base_path
     try:
         print('Activating new conda env, could take a while...')
         cmd = ['conda', 'activate', ani_env_name, '&&', 'P:', '&&', 'cd', ani_base_path, '&&', 'anipose', 'triangulate', '&&', 'anipose', 'label-3d']
@@ -665,8 +732,36 @@ def collectCalib():
                 calibration_path = os.path.join(dirpath, "calibration", "calibration.toml")
                 if os.path.isfile(calibration_path):
                     parent_folder = os.path.basename(dirpath)
-                    shutil.copy(calibration_path, os.path.join(r'C:\Users\rnel\Documents\Python Scripts\calib history', f'calibration-{pm.date}-{parent_folder}.toml'))
-                    shutil.copy(calibration_path, r'C:\Users\rnel\Documents\Python Scripts')
+                    shutil.copy(calibration_path, os.path.join(r'C:\Users\mkrig\Documents\Python Scripts\calib history', f'calibration-{parent_folder}.toml'))
+                    shutil.copy(calibration_path, r'C:\Users\mkrig\Documents\Python Scripts')
+
+def collectCSV():
+    src = Path(pm.ani_base_path)
+    dst = Path(pm.data_path) / 'clean'
+    dst.mkdir(parents=True, exist_ok=True)
+    csvs = list(src.rglob('*.csv'))
+
+    if not csvs:
+        print('No CSV found. Nothing is copied.')
+        return
+    
+    for f in csvs:
+        tgt = dst / f.name
+        if tgt.exists():
+            if filecmp.cmp(f, tgt, shallow=False):
+                print(f'Skipped existing CSV: {f.stem}')
+                continue
+            stem, suffix = f.stem, f.suffix
+            i = 1
+            while True:     # keep all the versions and rename new ones
+                tgt_new = dst / f"{stem}_{i}{suffix}"
+                if not tgt_new.exists():
+                    tgt = tgt_new
+                    break
+                i += 1
+
+        shutil.copy(f, tgt)
+        print(f'Copied CSV: {f.stem}')
 
 if __name__ == '__main__':
     updateOffset(list(CAM_OFFSETS.values()))        #FIXME make it able to run standalone
@@ -684,18 +779,13 @@ if __name__ == '__main__':
             pass
 
     # now move everything to colab
-    kids = copyToGoogle(pm.vid_path)
+    '''    kids = copyToGoogle(pm.vid_path)
     while not input('Paused for Colab. Input "continue" after Colab is done.\n> ')=='continue':
         pass
     print(kids)
-    pickupFromGoogle(pm.animal, pm.date)
+    pickupFromGoogle(pm.animal, pm.date)'''
 
-    # runDLC(vid_path)
-
-    '''Ref = [
-        {k: tuple(SCALE_FACTOR * v for v in val) for k, val in obj.items()}
-        for obj in Ref
-    ] # scale Ref's'''
+    runDLC(pm.vid_path)
     setupAnipose(pm.ani_base_path, pm.vid_path)
     runAnipose(pm.ani_base_path)
     

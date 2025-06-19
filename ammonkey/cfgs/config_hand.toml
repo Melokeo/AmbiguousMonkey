@@ -1,0 +1,61 @@
+project = "Anipose_BBT"
+model_folder = 'C:\Users\rnel\Desktop\DLC\Model\BBT\BBT_Model\PICI-BBT-2025-03-12'
+nesting = 1
+video_extension = 'mp4'
+
+[calibration]
+board_type = "charuco"          # checkerboard / charuco / aruco
+board_size = [5,7]   # width and height of grid
+board_marker_bits = 6           # number of bits in the markers, if aruco/charuco
+board_marker_dict_number = 50 #number of markers in dictionary, if aruco/charuco
+board_marker_length = 22         # length of marker side
+board_square_side_length = 37    # If charuco or checkerboard, square side length
+
+
+[filter]
+enabled = true
+medfilt = 13                    # length of median filter
+offset_threshold = 25           # offset from median filter to count as jump
+score_threshold = 0.8           # score below which to count as bad
+spline = true                   # interpolate using cubic spline instead of linear 
+
+
+[labeling]
+scheme = [
+    ["I_T", "I_J2", "I_J1", "I_K", "W", "T_K", "T_J", "T_T"],
+	["Y", "X1", "X2"],
+	["W_U", "W_R", "Frm"]
+]
+
+[triangulation]
+triangulate = true
+cam_regex = '-cam([1-9])'
+cam_align = "3"
+ransac = true
+optim = false
+constraints = [
+	['I_T','I_J2'], ['I_J2', 'I_J1'], ['I_J1','I_K'],
+	['I_K', 'W'], ['W', 'T_K'], ['T_K', 'T_J'], ['T_J','T_T'],
+	['X1','X2'],['X1','Y'],
+	['W_R', 'W_U'], ['Frm', 'W_R'], ['Frm', 'W_U']
+]
+
+scale_smooth = 10
+scale_length = 10
+scale_length_weak = 2
+reproj_error_threshold = 0.1
+score_threshold = 0.4
+n_deriv_smooth = 2
+axes = [
+    ["x", "X1", "X2"],
+    ["z", "X1", "Y"]
+]
+
+reference_point = "X1"
+
+[angles]
+
+
+
+[pipeline]
+videos-raw = "videos-raw"

@@ -15,7 +15,7 @@ Currently it runs as separate sub-modules.
 
 ## Dependency
 
-...
+See `amm-env.yaml`.
 
 ## Pipeline
 

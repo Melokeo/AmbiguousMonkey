@@ -24,8 +24,9 @@ import win32com.client
 
 from .utils import VidSyncLED as Sync
 from .utils import VidSyncAud as SyncAud
-from .utils.PathManager import PathMngr
 from .utils.log import Wood
+from .utils.silence import silence
+from .utils.PathManager import PathMngr
     
 class Task(Enum):
     All = auto()
@@ -50,7 +51,9 @@ PPATH_RAW = os.path.join(
 if not os.path.exists(PPATH_RAW):
     PPATH_RAW = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025\04\20250403'
                          # path of default raw data (eg P:\....02\05\20250205\). keep the r in front.
-pm = PathMngr(PPATH_RAW)
+                         
+with silence(): # suppress init output
+    pm = PathMngr(PPATH_RAW)
 ANIMALS = ['Pici']
 PATH_ANI_CFG = ''
 PATH_ANI_CALIB = ''

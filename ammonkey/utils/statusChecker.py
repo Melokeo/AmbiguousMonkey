@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from typing import Optional, Union, List
 import re
 from tqdm import tqdm
-from ambiguousmonkey import monkeyUnityv1_8 as mky
-from ambiguousmonkey.utils.pullAniAll import getAllDates, convertRawToData, getCSVPathUnder
-from ambiguousmonkey.utils.silence import silence
+from .. import monkeyUnityv1_8 as mky
+from .pullAniAll import getAllDates, convertRawToData, getCSVPathUnder
+from .silence import silence
 
 @dataclass
 class checkpoint:

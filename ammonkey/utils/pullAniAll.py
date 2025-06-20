@@ -10,8 +10,8 @@ from typing import Iterator
 from datetime import datetime
 from pathlib import Path
 from tqdm import tqdm
-from ambiguousmonkey import monkeyUnityv1_8 as mky
-from ambiguousmonkey.utils.silence import silence
+from .. import monkeyUnityv1_8 as mky
+from .silence import silence
 
 t = mky.Task.Pull
 

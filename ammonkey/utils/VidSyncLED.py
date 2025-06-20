@@ -14,6 +14,9 @@ debug = False
 show_plt = False
 ffmpeg_path = r'C:\ffmpeg\bin\ffmpeg.exe'
 ffprobe_path = r'C:\ffmpeg\bin\ffprobe.exe'
+# if below doesnt work try ffmpeg with path above
+ffmpeg_path = 'ffmpeg'
+ffprobe_path = 'ffprobe'
 
 if debug or show_plt:
     print(f'Alt: debug {debug}, show intensity plot {show_plt}')

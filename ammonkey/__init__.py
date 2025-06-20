@@ -6,9 +6,11 @@
 #print('MonkeyUnity Imported')
 
 from .core.daet import DAET
-from .core.expNote import ExpNote
+from .core.expNote import ExpNote, Task
 from .core.camConfig import CamGroup
+
 from .core.sync import syncVideos, VidSynchronizer
+
 from .core.dlc import DLCProcessor, DLCModel
 from .core.dlc import (
     createProcessor_BBT, createProcessor_Brkm, 
@@ -16,6 +18,6 @@ from .core.dlc import (
     modelPreset, initDlc
 )
 from .core.dlcCollector import mergeDlcOutput
-from .core.ani import AniposeProcessor
+from .core.ani import AniposeProcessor, runAnipose
 from .core.finalize import violentCollect
 from .core.fileOp import dataSetup

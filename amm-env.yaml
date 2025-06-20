@@ -1,0 +1,33 @@
+name: amm
+channels:
+  - conda-forge
+  - nvidia
+dependencies:
+  - python=3.10
+  - pip
+  - numpy==1.26.4
+  - pandas
+  - matplotlib
+  - scipy
+  - opencv
+  - librosa
+  - pathlib
+  - tqdm
+  - openpyxl
+  - cudatoolkit=11.2
+  - cudnn=8.1.0
+  - diskcache
+  - ffmpeg
+  
+  - pip:
+    - tensorflow==2.10.*
+    - deeplabcut==3.0.0rc7
+    - anipose
+    # below are for deeplabcut gui
+    - qtpy
+    - torch==2.0.1
+    - torchvision==0.15.2
+    - torchaudio==2.0.2
+    - qdarkstyle
+    - napari
+    - napari_deeplabcut

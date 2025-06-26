@@ -52,6 +52,9 @@ class SyncResult:
     message: str
     config_path: Optional[Path] = None
 
+    def __repr__(self):
+        return f'SyncResult({self.daet}, {self.status})'
+
 class VidSynchronizer:
     """Handles video synchronization with LED and audio detection"""
     
@@ -77,7 +80,7 @@ class VidSynchronizer:
             # get entries that need detection
             detection_daets = self._getTargetDaets(task, skip_existing)
             
-            results = []
+            results:list[SyncResult] = []
             
             # phase 1: run detection only for entries that need it
             if detection_daets:
@@ -114,6 +117,8 @@ class VidSynchronizer:
             detection_count = len(detection_daets)
             sync_count = len(all_detected_daets)
             self.wood.logger.info(f"Detection: {detection_count} entries, Sync: {sync_count} entries")
+            for sr in results:
+                self.wood.logger.info(f'{sr.daet}:\t{sr}')
             
             return results
 
@@ -165,7 +170,7 @@ class VidSynchronizer:
             sync_folder.mkdir(parents=True, exist_ok=True)
             
             # get video info
-            vid_set = self.notes.getVidSet(daet)
+            vid_set = self.notes.getVidSetIdx(daet)
             vid_paths = self._getVideoPaths(daet)
             
             if len(vid_paths) < 2:
@@ -475,7 +480,7 @@ class VidSynchronizer:
     
     def _getVideoPaths(self, daet: DAET) -> list[Path]:
         """Get actual video file paths for DAET"""
-        vid_set = self.notes.getVidSet(daet)
+        vid_set = self.notes.getVidSetIdx(daet)
         paths = []
         
         for cam_idx, vid_id in enumerate(vid_set):

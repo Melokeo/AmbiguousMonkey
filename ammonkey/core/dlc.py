@@ -48,8 +48,8 @@ class DLCModel:
         key = f"{self.name}_{self.cfg_path}_{self.trainset}_{self.shuffle}_{self.iteration}"
         return int(md5(key.encode()).hexdigest(), 16)
     @property
-    def md5_short(self) -> int:
-        return self.md5 % 10_000  # last 4-digit decimal
+    def md5_short(self) -> str:
+        return f'{self.md5 % 10_000:04d}'  # last 4-digit decimal
     
     @property
     def easy_name(self) -> str:

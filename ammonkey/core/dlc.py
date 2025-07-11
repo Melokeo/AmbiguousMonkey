@@ -173,6 +173,7 @@ class DLCModel:
             
         except Exception as e:
             logger.error(f'DLC analysis failed for {vid_path}: {e}')
+            raise e
             return False
     
     def _getPeedTree(self, vid_path:Path) -> Path:
@@ -296,7 +297,7 @@ class DLCProcessor:
             try:
                 with self.wood.log(f'DLC running {daet}'):
                     results[daet] = self.analyzeSingleDaet(daet)
-            except Exception as e:
+            except OSError as e:
                 logger.error(f'DLC batch processing failed: {daet} | {e}')
                 self.wood.logger.error(f'DLC batch processing failed: {daet} | {e}')
         

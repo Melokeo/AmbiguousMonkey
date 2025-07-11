@@ -7,6 +7,7 @@ import re
 import json
 import logging
 from pathlib import Path
+from .daet import DAET
 
 logger = logging.getLogger(__name__)
 
@@ -120,3 +121,62 @@ def parseDLCFolderName(f: Path) -> tuple[str, int, int]:
         raise ValueError(f"Unrecognized folder name format: {f.name}")
     name, ymd, dex = m.groups()
     return name, int(ymd), int(dex)
+
+def searchModelSets(data_path: Path = None) -> set[str] | None:
+    if not data_path: return None
+    pattern = re.compile(r'^(Pull-LR|Brkm|BBT|TS-LR)-\d{8}_\d{3,4}$')
+    seen = set()
+    for file in Path(data_path).rglob('*'):
+        if pattern.fullmatch(file.name) and file.name not in seen:
+            # print(file.name)
+            seen.add(file.name)
+    return seen if seen else None
+
+def isAniProcessed(ani_path: Path = None) -> int:
+    '''0: totally not; 1: fully processed (csv_count==daet_count); -1: partly processed'''
+    if not ani_path or not ani_path.exists():
+        return False
+    process_stat: list[bool] = []
+    for daet_folder in ani_path.glob('*'):
+        if not daet_folder.is_dir(): 
+            continue
+        csv_folder = daet_folder / 'pose-3d'
+        for f in csv_folder.glob('*.csv'):
+            process_stat.append(True)
+            break
+        else:   # i.e. no csv
+            try:
+                daet = DAET.fromString(daet_folder.name)
+                process_stat.append(daet.isCalib)
+            except ValueError:  # who knows what folder you put
+                process_stat.append(False)
+    
+    if all(process_stat):
+        return 1
+    elif any(process_stat):
+        return -1
+    else:
+        return 0
+
+def getUnprocessedDlcData(data_path: Path = None) -> list[str]:
+    '''
+    input a data_path, then 
+    '''
+    if data_path is None:
+        raise ValueError('getUnprocessedDlcData: must pass path')
+    if not data_path.exists():
+        raise FileNotFoundError(f'FNF: {data_path}')
+    sync_root_path = data_path / 'SynchronizedVideos'
+    if not sync_root_path.exists():
+        raise FileNotFoundError(f'FNF: {sync_root_path}')
+    
+    sets = searchModelSets(sync_root_path)
+    if not sets:
+        return None
+    
+    unprocessed = []
+    for p in sets:
+        if not isAniProcessed(data_path / 'anipose' / p):
+            unprocessed.append(p)
+    return unprocessed if unprocessed else None
+

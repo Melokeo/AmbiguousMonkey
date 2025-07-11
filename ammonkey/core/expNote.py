@@ -7,27 +7,10 @@ import pandas as pd
 from enum import Enum, auto
 
 from .fileOp import getDataPath
-from .daet import DAET
+from .daet import DAET, Task
 from ..utils.statusChecker import chk_dict
 
 logger = logging.getLogger(__name__)
-
-class Task(Enum):
-    ALL = auto()
-    TS = auto() 
-    BBT = auto()
-    BRKM = auto()
-    PULL = auto()
-    CALIB = auto()
-
-task_match = {  # all should be lowercase
-    Task.BBT: ['bbt'],
-    Task.BRKM: ['brkm', 'brnk', 'kman'], # you wont misspell it, right??
-    Task.PULL: ['pull', 'puul'],    # yes, someone once typed puul
-    Task.TS: ['touchscreen', 'touch screen', 'ts'],
-    Task.CALIB: ['calib'],
-    Task.ALL: ['']
-}
 
 @dataclass
 class ExpNote:
@@ -52,7 +35,7 @@ class ExpNote:
         Task.BBT: ['bbt'], Task.BRKM: ['brkm', 'brnk', 'kman'],
         Task.PULL: ['pull', 'puul'], Task.TS: ['touchscreen', 'touch screen', 'ts'],
         Task.CALIB: ['calib'], Task.ALL: ['']
-    })
+    })  # shouldnt use this
 
     def __post_init__(self):
         self.path = Path(self.path)
@@ -70,6 +53,7 @@ class ExpNote:
 
         self._daets: dict[str, DAET] = {}
         self._buildDaetIdx()
+        self.renameDuplicateDaets()
     
     def _buildDaetIdx(self):
         '''build index from df'''
@@ -93,6 +77,18 @@ class ExpNote:
             animals = ['pici']
             animal = next((p for p in parts if p.lower() in animals), parts[-2])
             return animal, parts[-1]
+    
+    def _cleanXlsx(self, df: pd.DataFrame) -> pd.DataFrame:
+        '''you never know what your colleagues dump into the notes.
+        empty lines, duplicates, typos, missing columns, pasta from yesterday...
+        namluepao quebulege heteidongsi'''
+        df = df[
+            df['Experiment'].notna() &
+            df['Task'].notna() &
+            (df['Experiment'].astype(str).str.strip() != '') &
+            (df['Task'].astype(str).str.strip() != '')
+        ].reset_index(drop=True)
+        return df
 
     def _loadDataFrame(self, xlsx_path: Path) -> pd.DataFrame:
         """load xlsx with header detection and validation"""
@@ -102,28 +98,45 @@ class ExpNote:
                 lambda r: r.astype(str).str.contains(self.header_key, na=False).any(), axis=1
             )].index[0]
             df = pd.read_excel(xlsx_path, header=header_idx)
+            df = self._cleanXlsx(df)
             
             # validate required columns exist
             missing_base = [col for col in ['Experiment', 'Task'] if col not in df.columns]
             if missing_base:
                 raise ValueError(f'Missing required columns: {missing_base}')
             
-            # warn about missing camera columns but don't crash
+            # warn about missing camera columns
             missing_cams = [hdr for hdr in self.cam_headers if hdr not in df.columns]
             if missing_cams:
                 logger.warning(f'Missing camera columns: {missing_cams}')
+                raise KeyError(f'Check the experiment note file.')
                 # add missing columns as empty
                 for hdr in missing_cams:
                     df[hdr] = None
             
             # add computed columns
-            df['daet'] = df.apply(lambda r: DAET(self.date, self.animal, r['Experiment'], r['Task']), axis=1)
-            df['is_void'] = df.get('VOID', '').astype(str).str.upper().isin(['T', 'TRUE', '1'])
+            df['daet'] = df.apply(lambda r: DAET.fromRow(r, self.date, self.animal), axis=1)
+            void_col = df.get('VOID', pd.Series('', index=df.index))
+            df['is_void'] = void_col.astype(str).str.upper().isin(['T', 'TRUE', '1'])
             df['is_calib'] = df['Experiment'].astype(str).str.contains('calib', case=False, na=False)
             
             return df
         except Exception as e:
             raise RuntimeError(f'Failed loading {xlsx_path}: {e}')
+        
+    def _daetOrNumber(self, daet: DAET|None, no: int|None) -> DAET:
+        '''allows daet input by index'''
+        if isinstance(daet, DAET):
+            return daet
+        elif daet is None and no is not None:
+            try:
+                daet = self.daets[no]
+                return daet
+            except IndexError as e:
+                logger.error(f'ExpNote: daet index out of range. {e}')
+                return None
+        else:
+            logger.error(f'ExpNote: need to specify either daet or index.')
 
     # === Core Interface ===
     
@@ -147,8 +160,12 @@ class ExpNote:
     def getDaetDlcRoot(self, daet: DAET) -> Path:
         return self.data_path / 'SynchronizedVideos' / str(daet) / 'DLC'
 
-    def getVidSetIdx(self, daet: DAET) -> list[int | None]:
+    def getVidSetIdx(self, daet: DAET=None, no: int=None) -> list[int | None]:
         """get video IDs for DAET - crash-proof"""
+        daet = self._daetOrNumber(daet, no)
+        if not daet:
+            return
+
         rec = self.getRow(daet)
         if rec is None:
             return []
@@ -168,12 +185,17 @@ class ExpNote:
                     vids.append(None)
         return vids
 
-    def checkVideoExistence(self, daet: DAET) -> dict[int, bool]:
+    def checkVideoExistence(self, daet: DAET=None, no: int=None) -> dict[int, bool]:
         """check if video files exist on disk for given DAET
         
         Returns:
             dict mapping **camera index** (0-based) to existence status
         """
+        # handle no# inputs
+        daet = self._daetOrNumber(daet, no)
+        if not daet:
+            return
+
         vid_set = self.getVidSetIdx(daet)
         if not vid_set:
             return {}
@@ -322,6 +344,38 @@ class ExpNote:
         
         return new_note
     
+    def applyTaskFilter(self, tasks:list[Task], exclude:bool=False) -> 'ExpNote':
+        '''returns a duplicate of the ExpNote with filtered tasks. 
+        by default include all tasks in list[Task].
+        Exclude list[Task] if exclude==True'''
+        if isinstance(tasks, Task):
+            tasks: list[Task] = [tasks]
+        matched_daets: list[DAET] = [
+            daet for daet in self.daets 
+            if any(daet.task_type==t 
+                    for t in tasks)
+        ]
+        if not exclude:
+            return self.dupWithWhiteList(matched_daets)
+        else:
+            return self.dupWithBlackList(matched_daets)
+        
+    def renameDuplicateDaets(self) -> None:
+        """
+        For any rows whose DAET (date-animal-experiment-task) repeats,
+        append “ (1)”, “ (2)”, … to all Task entries with the same Experiment and Task name,
+        then update the DAET field and rebuild the internal index.
+        """
+        for (exp, task), group in self.df.groupby(['Experiment', 'Task']):
+            if len(group) > 1:
+                for i, idx in enumerate(group.index, start=1):
+                    new_task = f"{task.strip()} ({i})"
+                    self.df.at[idx, 'Task'] = new_task
+                    self.df.at[idx, 'daet'] = DAET(self.date, self.animal, exp.strip(), new_task)
+
+        self._daets.clear()
+        self._buildDaetIdx()
+    
     # === pipeline status checkers ===
     def checkSync(self, daets:DAET|list[DAET]=None) -> int:
         '''Check if daet is synced'''
@@ -334,13 +388,8 @@ class ExpNote:
     def getAllTaskTypes(self) -> list[Task]:
         '''get all tasks found in this note'''
         tasks = {
-            t
+            daet.task_type
             for daet in self.daets
-            for t in Task
-            if (
-                t != Task.ALL and 
-                any(match in daet.experiment.lower() for match in task_match[t])
-            )
         }
         return list(tasks)
 

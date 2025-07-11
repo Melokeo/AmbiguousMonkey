@@ -15,9 +15,9 @@ from .expNote import ExpNote
 from .daet import DAET
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
-dlc_postfix_pattern = re.compile(r'_DLC_resnet\d+_[^_]+shuffle\d+_\d+(?:_filtered)?\.h5$')
+dlc_postfix_pattern = re.compile(r'DLC_resnet\d+_[^_]+shuffle\d+_\d+(?:_filtered)?\.h5$')
 
 def getH5Rename(file_name:Path | str, stem_only:bool=False) -> str:
     '''get rid of dlc postfix'''
@@ -125,7 +125,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         else:
             raise ValueError(f'Cannot get calib lib for unrecognized set: {model_set_name}')
 
-    def getCfgFile(self):
+    def getCfgFile(self) -> Path:
         '''get cfg based on model_set_name'''
         cfg_path = BASE_DIR / 'cfgs'
         if 'TS' in self.model_set_name or 'Pull' in self.model_set_name:
@@ -135,13 +135,26 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         else:
             return cfg_path / 'config.toml'
     
-    def getCalibFile(self):
+    def getCalibFile(self) -> Path:
         '''determine calib file from note, with calib library as fallback'''
         calib = self.calib_lib.lookUp(int(self.note.date))
         if calib is None:
             raise ValueError(f'AniposeProcessor: cannot find this date\'s calib file {self.note.date}')
         else:
             return calib
+        
+    def runPipeline(self) -> bool:
+        try:
+            self.setupRoot()
+            self.setupCalibs()
+            self.calibrate()
+            self.batchSetup()
+            self.triangulate()
+        except Exception as e:
+            logger.error(f'AP.runPipeline error: {e}')
+            return False
+        else:
+            return True
         
     def setupSingleCalib(self, daet:DAET)->None:
         if not daet.isCalib:
@@ -161,7 +174,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         for daet in self.note.getCalibs():
             self.setupSingleCalib(daet)
 
-    def calibrate(self) -> None:
+    def calibrateCLI(self) -> None:
         '''CLI anipose'''
         if not (self.ani_root_path / 'config.toml').exists():
             self.setupRoot()
@@ -176,6 +189,28 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             logger.error(result.stderr)
 
         self.collectCalibs()
+    
+    def calibrate(self) -> None:
+        '''directly calls anipose. will auto-collect'''
+        if not (self.ani_root_path / 'config.toml').exists():
+            self.setupRoot()
+
+        try:
+            from anipose import anipose, calibrate
+        except ImportError as e:
+            logger.error('Cannot find anipose installed, or dependency not intact')
+            return False
+        
+        cfg = anipose.load_config(str(self.ani_root_path / 'config.toml'))
+        logger.debug(cfg)
+        try:
+            calibrate.calibrate_all(config=cfg)
+        except Exception as e:  # idk what can be wrong
+            logger.error(f'Failed to calibrate: {e}')
+        else:
+            logger.info('Calibration successful')
+            self.collectCalibs()
+            return True
 
     def collectCalibs(self) -> None:
         for daet in self.note.getCalibs():
@@ -187,7 +222,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
                 except OSError as e:
                     logger.error(f'collectCalib copy failed {e}')
             else:
-                logger.warning(f'FNF: {daet_calib_toml}')
+                logger.warning(f'collectCalib(): FNF {daet_calib_toml}')
 
         self.calib_lib.updateLibIndex()
         self.calib_file = self.getCalibFile()
@@ -268,7 +303,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         for daet in self.note.daets:
             self.setupSingleDaet(daet, use_filtered, copy_videos)
     
-    def triangulate(self) -> None:
+    def triangulateCLI(self) -> None:
         '''CLI anipose'''
         cmd = [
             'conda', 'activate', self.conda_env, '&&',
@@ -279,6 +314,25 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         result = subprocess.run(cmd, shell=True, check=True)
         if result.stderr:
             logger.error(result.stderr)
+    
+    def triangulate(self) -> None:
+        '''directly calls anipose'''
+        try:
+            from anipose import anipose, triangulate
+        except ImportError as e:
+            logger.error('Cannot find anipose installed, or dependency not intact')
+            return False
+        
+        logger.info('Triangulating all tasks')
+        try:
+            cfg = anipose.load_config(str(self.ani_root_path / 'config.toml'))
+            logger.debug(cfg)
+            triangulate.triangulate_all(cfg)
+        except Exception as e:
+            logger.error(f'Failed triangulation: {e}')
+            return False
+        else:
+            return True
 
     def pee(self, daet_root: Path) -> None:
         # write this analysis' info
@@ -291,5 +345,39 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             f.writelines(info)
     
 # util func
-def runAnipose():
-    pass
+def runAnipose(note:ExpNote, model_set_name:str):
+    logger.setLevel(logging.INFO)
+
+    ap = AniposeProcessor(note, model_set_name)
+    ap.setupRoot()
+    ap.setupCalibs()
+
+    # dont want to crash because of no anipose
+    try:
+        import anipose
+        ani_flag = True
+    except ImportError:
+        ani_flag = False
+
+    logger.info(f'Into switch: anipose {ani_flag}')
+    if ani_flag:
+        logger.info('calibrating')
+        ap.calibrate()
+
+        logger.info('setting up data')
+        ap.batchSetup()
+
+        logger.info('trangulate')
+        ap.triangulate()
+
+    else:
+        logger.info('calibrating')
+        ap.calibrateCLI()
+
+        logger.info('setting up data')
+        ap.batchSetup()
+
+        logger.info('trangulate')
+        ap.triangulateCLI()
+
+    return ap

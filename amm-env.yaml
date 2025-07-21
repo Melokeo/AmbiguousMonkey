@@ -23,6 +23,7 @@ dependencies:
     - tensorflow==2.10.*
     - deeplabcut==3.0.0rc7
     - anipose
+    - opencv-python==4.11.0.86
     # below are for deeplabcut gui
     - qtpy
     - torch==2.0.1

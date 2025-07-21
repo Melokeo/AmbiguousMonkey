@@ -5,10 +5,13 @@ from datetime import datetime
 
 from .expNote import ExpNote
 
-def violentCollect(ani_path: Path, clean_path: Path) -> None:
+def violentCollect(ani_path: Path|str, clean_path: Path|str) -> None:
     '''simply collects all csvs in pose-3d inside an anipose folder'''
+    ani_path = Path(ani_path)
+    clean_path = Path(clean_path)
     if not ani_path.exists():
         raise FileNotFoundError(f'violentCollect: non-existing ani_path {ani_path}')
+    
     dst = clean_path / ani_path.name
     dst.mkdir(exist_ok=True)
 

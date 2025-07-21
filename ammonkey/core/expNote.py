@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import pandas as pd
 from enum import Enum, auto
+import re
+from typing import Iterator
 
 from .fileOp import getDataPath
 from .daet import DAET, Task
@@ -17,7 +19,7 @@ class ExpNote:
     """
     Load and manage experiment notes from Excel with DAET-based interface.
     """
-    path: Path | str
+    path: Path
     header_key: str = 'Experiment'
     cam_headers: list[str] = field(default_factory=lambda: [
         'Camera files \n(1 LR)', 'Camera files \n(2 LL)', 
@@ -73,10 +75,12 @@ class ExpNote:
         # flexible: try common patterns
         if len(parts) >= 4 and parts[-4].lower() in ['pici']: 
             return parts[-4], parts[-1]
-        else:  # fallback - look for known animals
+        elif len(parts) >= 2:  # fallback - look for known animals
             animals = ['pici']
             animal = next((p for p in parts if p.lower() in animals), parts[-2])
             return animal, parts[-1]
+        else:
+            raise ValueError(f'Too less parts in path {self.path}')
     
     def _cleanXlsx(self, df: pd.DataFrame) -> pd.DataFrame:
         '''you never know what your colleagues dump into the notes.
@@ -115,7 +119,7 @@ class ExpNote:
                     df[hdr] = None
             
             # add computed columns
-            df['daet'] = df.apply(lambda r: DAET.fromRow(r, self.date, self.animal), axis=1)
+            df['daet'] = df.apply(lambda r: DAET.fromRow(r, self.date, self.animal), axis=1) # type: ignore
             void_col = df.get('VOID', pd.Series('', index=df.index))
             df['is_void'] = void_col.astype(str).str.upper().isin(['T', 'TRUE', '1'])
             df['is_calib'] = df['Experiment'].astype(str).str.contains('calib', case=False, na=False)
@@ -124,7 +128,7 @@ class ExpNote:
         except Exception as e:
             raise RuntimeError(f'Failed loading {xlsx_path}: {e}')
         
-    def _daetOrNumber(self, daet: DAET|None, no: int|None) -> DAET:
+    def _daetOrNumber(self, daet: DAET|None, no: int|None) -> DAET | None:
         '''allows daet input by index'''
         if isinstance(daet, DAET):
             return daet
@@ -137,6 +141,7 @@ class ExpNote:
                 return None
         else:
             logger.error(f'ExpNote: need to specify either daet or index.')
+            return None
 
     # === Core Interface ===
     
@@ -160,11 +165,11 @@ class ExpNote:
     def getDaetDlcRoot(self, daet: DAET) -> Path:
         return self.data_path / 'SynchronizedVideos' / str(daet) / 'DLC'
 
-    def getVidSetIdx(self, daet: DAET=None, no: int=None) -> list[int | None]:
+    def getVidSetIdx(self, daet: DAET|None=None, no: int|None=None) -> list[int | None]:
         """get video IDs for DAET - crash-proof"""
         daet = self._daetOrNumber(daet, no)
         if not daet:
-            return
+            raise ValueError(f'daet not found: {daet}')
 
         rec = self.getRow(daet)
         if rec is None:
@@ -185,7 +190,7 @@ class ExpNote:
                     vids.append(None)
         return vids
 
-    def checkVideoExistence(self, daet: DAET=None, no: int=None) -> dict[int, bool]:
+    def checkVideoExistence(self, daet: DAET|None=None, no: int|None=None) -> dict[int, bool]:
         """check if video files exist on disk for given DAET
         
         Returns:
@@ -194,7 +199,7 @@ class ExpNote:
         # handle no# inputs
         daet = self._daetOrNumber(daet, no)
         if not daet:
-            return
+            raise ValueError(f'Invalid daet / number: {daet=}, {no=}')
 
         vid_set = self.getVidSetIdx(daet)
         if not vid_set:
@@ -203,7 +208,8 @@ class ExpNote:
         existence = {}
         for cam_idx, vid_id in enumerate(vid_set):
             if vid_id is None:
-                # don't include missing video entries in result
+                # don't include missing video entries in result (no)
+                existence[cam_idx] = False
                 continue
                 
             vid_path = self.getVidPath(daet, cam_idx)
@@ -349,7 +355,8 @@ class ExpNote:
         by default include all tasks in list[Task].
         Exclude list[Task] if exclude==True'''
         if isinstance(tasks, Task):
-            tasks: list[Task] = [tasks]
+            tasks = [tasks]
+            
         matched_daets: list[DAET] = [
             daet for daet in self.daets 
             if any(daet.task_type==t 
@@ -369,7 +376,7 @@ class ExpNote:
         for (exp, task), group in self.df.groupby(['Experiment', 'Task']):
             if len(group) > 1:
                 for i, idx in enumerate(group.index, start=1):
-                    new_task = f"{task.strip()} ({i})"
+                    new_task = f"{str(task).strip()} ({i})"
                     self.df.at[idx, 'Task'] = new_task
                     self.df.at[idx, 'daet'] = DAET(self.date, self.animal, exp.strip(), new_task)
 
@@ -377,19 +384,34 @@ class ExpNote:
         self._buildDaetIdx()
     
     # === pipeline status checkers ===
-    def checkSync(self, daets:DAET|list[DAET]=None) -> int:
+    def checkSanity(self, ignore_void:bool=True) -> bool:
+        if not self.daets:
+            return False
+
+        for daet in self.daets:
+            if self.is_daet_void(daet) and ignore_void:
+                continue
+            vid_ext = self.checkVideoExistence(daet=daet)
+            if not all([v for v in vid_ext.values()]):
+                logger.info(f'{daet}: {vid_ext}')
+                return False
+        return True
+
+    def checkSync(self, daets:DAET|list[DAET]|None=None) -> int:
         '''Check if daet is synced'''
         if not daets:
-            daets:list[DAET] = self.getValidDaets()
+            daets = self.getValidDaets()
         if isinstance(daets, DAET):
-            daets:list[DAET] = [daets]
+            daets = [daets]
         ...
+        return 0
 
     def getAllTaskTypes(self) -> list[Task]:
         '''get all tasks found in this note'''
         tasks = {
             daet.task_type
             for daet in self.daets
+            if daet.task_type is not None
         }
         return list(tasks)
 
@@ -402,14 +424,46 @@ class ExpNote:
             'calibration_entries': len(self.df[self.df['is_calib']]),
             'processable_entries': len(self.getValidDaets())
         }
+    
+    def is_daet_void(self, daet:DAET|None = None, no:int|None = None) -> bool:
+        if daet is None:
+            if no is None:
+                raise ValueError('is_daet_void: double None')
+            else:
+                daet = self._daetOrNumber(daet=daet, no=no)
+                if daet is None:
+                    raise ValueError('is_daet_void: returned None daet')
+        rec = self.getRow(daet)
+        if not rec is None:
+            return rec['is_void']
+        else:
+            raise KeyError(f'is_daet_void: unknown daet {daet}')
 
     def __repr__(self) -> str:
         return f'ExperimentNotes({self.animal} {self.date} with {len(self.df)} entries)'
-    
+
+def iter_notes(year_path: Path) -> Iterator[ExpNote]:
+    re_date = re.compile(r'20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])')
+    for folder_mo in sorted(year_path.iterdir()):
+        if not folder_mo.is_dir():
+            continue
+        for folder_date in sorted(folder_mo.iterdir()):
+            if not re.search(re_date, folder_date.name):
+                logger.info(f'skipped {folder_date.name} cuz not date')
+                continue
+            for note_file in folder_date.glob('PICI_????????.xlsx'):
+                try:
+                    yield ExpNote(note_file.parent)
+                except RuntimeError as e:
+                    logger.error(f'Loading xlsx failed {folder_date.name}')
+                break
+            else:
+                logger.warning(f'No note found under {folder_date.name}')
+
 def mian() -> None:
     '''xiang chi mian le [usage example]'''
     # test with actual file
-    raw_path = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025\04\20250403'
+    raw_path = Path(r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025\04\20250403')
     
     try:
         # initialize notes
@@ -430,8 +484,8 @@ def mian() -> None:
         daets = notes.getDaets()
         for i, daet in enumerate(daets, 1):
             rec = notes.getRow(daet)
-            void_status = " [VOID]" if rec['is_void'] else ""
-            calib_status = " [CALIB]" if rec['is_calib'] else ""
+            void_status = " [VOID]" if rec['is_void'] else "" # type: ignore
+            calib_status = " [CALIB]" if rec['is_calib'] else "" # type: ignore
             print(f"{i:2d}. {daet}{void_status}{calib_status}")
         print()
         
@@ -486,7 +540,6 @@ def mian() -> None:
         print("This might help debug the issue:")
         
         # debug info
-        from pathlib import Path
         p = Path(raw_path)
         print(f"  Path exists: {p.exists()}")
         if p.exists():

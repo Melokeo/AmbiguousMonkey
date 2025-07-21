@@ -81,6 +81,7 @@ class DAET:
         Only takes 1,2,-1 delimiters
         """
         p = daet_str.split('-')
+        parts: list[str] = ['']*4
         if len(p) > 4:
             parts[3] = p.pop(-1)
             parts[0] = p.pop(0)

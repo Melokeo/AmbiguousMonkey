@@ -81,6 +81,10 @@ class DLCModel:
 
     def __repr__(self):
         return f"DLCModel pointer ({self.id_str})"
+    
+    @property
+    def info(self) -> str:
+        return '\n'.join(self.information())
 
     @classmethod
     def fromDict(cls, d: dict):
@@ -103,7 +107,7 @@ class DLCModel:
             'short': self.short
         }
     
-    def information(self) -> str:
+    def information(self) -> list[str]:
         '''model information'''
         info = []
         info.append(f"Model {self.easy_name}")
@@ -112,8 +116,11 @@ class DLCModel:
         info.append(f"model folder: {str(self.model_path)}\n\tExist {self.model_path.exists()}")
         
         if self.model_path.exists():
-            iters = [int(re.search(r'snapshot-(\d+)\.index', f.name).group(1))
-                for f in self.model_path.glob('snapshot-*.index')]
+            iters = [ # :)
+                int(m.group(1)) 
+                for f in self.model_path.glob('snapshot-*.index')
+                if (m := re.search(r'snapshot-(\d+)\.index', f.name))
+            ]       
             info.append(f'max training iteration: {max(iters)}')
         if self.iter_path.exists():
             sib = [sub.name.split('trainset')[-1] for sub in self.iter_path.glob(f'*trainset*')]
@@ -123,7 +130,7 @@ class DLCModel:
 
     def runOnce(self, vid_path: Path | str, override_exist:bool=True) -> bool:
         """run DLC analysis on single video directory"""
-        if not ready:
+        if not ready or deeplabcut is None:
             logger.error('deeplabcut is called before successful import')
             return False
         if not self.is_available:
@@ -144,7 +151,7 @@ class DLCModel:
             # analyze videos
             deeplabcut.analyze_videos(
                 str(self.cfg_path),
-                str(vid_path), 
+                [str(vid_path)], 
                 videotype='mp4',           
                 trainingsetindex=0,
                 shuffle=self.shuffle,
@@ -278,13 +285,15 @@ class DLCProcessor:
         
         return success
 
-    def batchProcess(self, daets: list[DAET] = None, min_videos: int = 2) -> dict[DAET, bool]:
+    def batchProcess(self, daets_to_process: list[DAET] | None = None, min_videos: int = 2) -> dict[DAET, bool]:
         """process multiple DAETs with DLC analysis"""
         if not ready:
             logger.error('DLC not properly initialized')
             return {}
-        if daets is None:
+        if daets_to_process is None:
             daets = self.note.getValidDaets(min_videos=min_videos, skip_void=True)
+        else:
+            daets = daets_to_process
         
         # write the history (yeah)
         self.wood.logger.info('Starting DLC with models:')
@@ -346,7 +355,7 @@ def createProcessor_Brkm(note: ExpNote) -> DLCProcessor:
     
     return DLCProcessor(note, model_dict)
 
-def modelPreset(preset:str) -> DLCModel | None:
+def modelPreset(preset:str) -> DLCModel:
     if preset == 'TS-L':
         return DLCModel('TS-LJan30', Path(r"D:\DeepLabCut\TS-L-shaved-N\config.yaml"), iteration=0, shuffle=4, short='TS-L')
     if preset == 'TS-R':
@@ -361,5 +370,6 @@ def modelPreset(preset:str) -> DLCModel | None:
         return DLCModel('piciMar19', Path(r"D:\DeepLabCut\BBT\config.yaml"), iteration=3, shuffle=1, short='BBT')
     #if preset == 'Pull-Hand':
     #    return DLCModel('TS-RJan30', Path(r"D:\DeepLabCut\TS-R-shaved-N\config.yaml"), iteration=0, shuffle=7, short='Pull-Hand')
+    raise ValueError(f'Unknown preset {preset}')
     
     

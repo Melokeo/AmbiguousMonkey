@@ -249,8 +249,10 @@ class ExpNote:
         vid_paths = []
         for i, vid_id in enumerate(vid_set):
             cam_folder = self.path / f'cam{i + 1}'
-            if not cam_folder.exists():
+            if not cam_folder.exists() or vid_id is None:
                 vid_paths.append(None)
+                continue
+            
             for digits in [4, 5]:
                 vid_filename = f'C{vid_id:0{digits}d}.{self.video_extension}'
                 vid_path = cam_folder / vid_filename

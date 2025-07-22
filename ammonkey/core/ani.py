@@ -30,7 +30,7 @@ def getH5Rename(file_name:Path | str, stem_only:bool=False) -> str:
         file_name
     )
 
-def insertModelToH5Name(file_name:Path | str) -> str:
+def insertModelToH5Name(file_name:Path | str) -> str: 
     pass
 
 @dataclass
@@ -49,7 +49,7 @@ class CalibLib:
         for calib in self.lib_path.glob('*.toml'):
             if not 'calibration' in calib.name:
                 continue
-            date = int(re.search(date_pattern, calib.name).group())
+            date = int(re.search(date_pattern, calib.name).group()) #type:ignore
             if date in self.lib.keys():
                 self.lib[date].append(calib)
             else:
@@ -82,9 +82,9 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
     note: ExpNote
     model_set_name: str
     conda_env: str = 'anipose-3d'
-    config_file: Path = None
-    calib_file: Path = None
-    calib_lib: CalibLib = None
+    config_file: Path = None    #type:ignore
+    calib_file: Path = None     #type:ignore
+    calib_lib: CalibLib = None  #type:ignore
 
     def __post_init__(self):
         self.ani_root_path = Path(self.note.data_path) / 'anipose' / self.model_set_name
@@ -100,9 +100,9 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
     
     @property
     def info(self) -> str:
-        return self.information(concat=True)
+        return self.information(concat=True) #type:ignore
 
-    def information(self, concat=True):
+    def information(self, concat=True) -> str | list[str]:
         info = []
         info.append('AniposeProcessor')
         info.append(f'{self.note.animal} @ {self.note.date}')
@@ -190,7 +190,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
 
         self.collectCalibs()
     
-    def calibrate(self) -> None:
+    def calibrate(self) -> bool:
         '''directly calls anipose. will auto-collect'''
         if not (self.ani_root_path / 'config.toml').exists():
             self.setupRoot()
@@ -207,6 +207,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             calibrate.calibrate_all(config=cfg)
         except Exception as e:  # idk what can be wrong
             logger.error(f'Failed to calibrate: {e}')
+            return False
         else:
             logger.info('Calibration successful')
             self.collectCalibs()
@@ -315,7 +316,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         if result.stderr:
             logger.error(result.stderr)
     
-    def triangulate(self) -> None:
+    def triangulate(self) -> bool:
         '''directly calls anipose'''
         try:
             from anipose import anipose, triangulate

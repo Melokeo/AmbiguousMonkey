@@ -8,7 +8,7 @@ import json
 import logging
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Sequence
 
 from ..utils import VidSyncLED as SyncLED
 from ..utils import VidSyncAud as SyncAud
@@ -47,7 +47,7 @@ class SyncResult:
     daet: DAET
     led_starts: list[int | None]  # None for problematic detection
     audio_starts: list[int | None]
-    corrected_starts: list[int | None]
+    corrected_starts: list[int | None] | None
     status: str  # 'success', 'warning', 'failed'
     message: str
     config_path: Optional[Path] = None
@@ -58,20 +58,28 @@ class SyncResult:
 class VidSynchronizer:
     """Handles video synchronization with LED and audio detection"""
     
-    def __init__(self, notes: ExpNote, cam_cfg: CamConfig = None, sync_cfg: SyncConfig = None):
+    def __init__(self, notes: ExpNote, cam_cfg: CamConfig = None, sync_cfg: SyncConfig = None): #type:ignore
         self.notes = notes
         self.cam_config = cam_cfg or CamConfig()
         self.config = sync_cfg or SyncConfig()
         self.wood = Wood(notes.data_path) 
 
-    def setROI(self, daet_to_check:DAET=None, frame:int=500, cam=None):
+    def setROI(self, daet_to_check:DAET|None=None, frame:int=500, cam=None):
         if daet_to_check is None:
             daet_to_check = next((daet for daet in self.notes.daets if not daet.isCalib), None)
-        if not daet_to_check: return
-        vid_paths = self.notes.getVidSetPaths(daet_to_check)
+        if daet_to_check is None:
+            return
+
+        while True:
+            vid_paths = self.notes.getVidSetPaths(daet_to_check)
+            if vid_paths and any(v is not None for v in vid_paths):
+                break
+            daet_to_check = next((daet for daet in self.notes.daets if not daet.isCalib and daet != daet_to_check), None)
+            if daet_to_check is None:
+                return
 
         self.cam_config.batchSelectROIs(vid_paths)
-        
+
     def syncAll(self, task: Task = Task.ALL, skip_existing: bool = True) -> list[SyncResult]:
         """
         Run synchronization for all valid entries
@@ -137,7 +145,7 @@ class VidSynchronizer:
                     
                     # run audio sync
                     sync_results = SyncAud.sync_videos(
-                        vid_paths, 
+                        [str(vp) for vp in vid_paths], 
                         fps=self.config.audio_fps,
                         duration=self.config.audio_test_duration,
                         start=0
@@ -150,7 +158,7 @@ class VidSynchronizer:
                         sr=self.config.audio_sample_rate,
                         fps=self.config.audio_fps,
                         duration=self.config.audio_save_duration,
-                        tgt_path=sync_detection_path
+                        tgt_path=str(sync_detection_path)
                     )
                     
                     # extract start frames
@@ -175,7 +183,7 @@ class VidSynchronizer:
             
             if len(vid_paths) < 2:
                 return SyncResult(
-                    daet=daet, led_starts=[], audio_starts=audio_starts,
+                    daet=daet, led_starts=[], audio_starts=audio_starts, #type:ignore
                     corrected_starts=[], status='failed',
                     message="Insufficient videos"
                 )
@@ -198,7 +206,7 @@ class VidSynchronizer:
             
             # create sync config if successful
             config_path = None
-            if status in ['success', 'warning']:
+            if status in ['success', 'warning'] and corrected_starts:
                 config_path = self._createSyncConfig(daet, vid_paths, vid_set, corrected_starts)
                 # mark as processed
                 (sync_folder / '.skipDet').touch()
@@ -206,8 +214,8 @@ class VidSynchronizer:
             return SyncResult(
                 daet=daet,
                 led_starts=led_starts,
-                audio_starts=audio_starts, 
-                corrected_starts=corrected_starts,
+                audio_starts=audio_starts,  #type:ignore
+                corrected_starts=corrected_starts, 
                 status=status,
                 message=message,
                 config_path=config_path
@@ -215,7 +223,7 @@ class VidSynchronizer:
             
         except Exception as e:
             return SyncResult(
-                daet=daet, led_starts=[], audio_starts=audio_starts,
+                daet=daet, led_starts=[], audio_starts=audio_starts,    #type:ignore
                 corrected_starts=[], status='failed',
                 message=f"LED detection error: {e}"
             )
@@ -260,7 +268,7 @@ class VidSynchronizer:
         return led_starts
     
     def _crossValidate(self, led_starts: list[int | None], 
-                    audio_starts: list[int]) -> tuple[list[int | None], Optional[int], str]:
+                    audio_starts: list[int]) -> tuple[list[int | None]| None, Optional[int], str]:
         """Cross-validate LED and audio sync results"""
         if not audio_starts or len(led_starts) != len(audio_starts):
             return led_starts, -1, "Audio sync data unavailable"
@@ -288,8 +296,8 @@ class VidSynchronizer:
         # calculate median offset from valid detections
         offsets = []
         for i in valid_indices:
-            if audio_starts[i] is not None:
-                offsets.append(led_starts[i] - audio_starts[i])
+            if audio_starts[i] is not None and led_starts[i] is not None:
+                offsets.append(led_starts[i] - audio_starts[i]) #type:ignore
         
         if not offsets:
             return led_starts, -1, "Cannot compute offset - no valid audio/LED pairs"
@@ -320,7 +328,7 @@ class VidSynchronizer:
         
         # determine status
         if large_deviations >= 2:
-            return None, -2, f"Too many deviations ({large_deviations}) from audio sync"
+            return None, -2, f"Too many deviations ({large_deviations}) from audio sync"    
         
         message_parts = []
         if num_corrections > 0:
@@ -354,7 +362,7 @@ class VidSynchronizer:
                 output_name = f"{daet}-cam{cam_num}.{self.config.video_extension}"
             else:
                 group = self.cam_config.groups.get(cam_num, 'unknown')
-                group_letter = group.value if hasattr(group, 'value') else str(group)
+                group_letter = group.value if hasattr(group, 'value') else str(group)   #type:ignore
                 output_name = f"{group_letter}/{daet}-cam{cam_num}.{self.config.video_extension}"
                 out_path = Path(sync_folder / output_name) # for local check
                 if not (op:=out_path.parent).exists:
@@ -378,7 +386,7 @@ class VidSynchronizer:
         }
         
         # save config
-        config_path = sync_folder / f"sync_config_{row['Experiment']}_{row['Task']}.json"
+        config_path = sync_folder / f"sync_config_{row['Experiment']}_{row['Task']}.json"   #type:ignore
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=4)
             
@@ -447,17 +455,17 @@ class VidSynchronizer:
                 
         return target_daets
     
-    def _getAllDetectedDaets(self, task: Task) -> list[str]:
+    def _getAllDetectedDaets(self, task: Task) -> list[DAET]:
         """Get all DAETs that have detection results (both new and existing)"""
         # filter by task first
         if task == Task.ALL:
             candidates = self.notes.getValidDaets(min_videos=2)
         else:
             task_df = self.notes.filterByTask(task)
-            candidates = [daet for daet in task_df['daet'].tolist() 
-                        if daet in self.notes.getValidDaets(min_videos=2)]
+            candidates: list[DAET] = [daet for daet in task_df['daet'].tolist() 
+                                      if daet in self.notes.getValidDaets(min_videos=2)]
         
-        detected_daets = []
+        detected_daets: list[DAET] = []
         for daet in candidates:
             sync_folder = self._getSyncFolder(daet)
             skip_det_file = sync_folder / '.skipDet'
@@ -494,8 +502,8 @@ class VidSynchronizer:
 
 # === Usage Function ===
 
-def syncVideos(notes: ExpNote, cam_cfg: CamConfig = None, 
-               sync_cfg: SyncConfig = None, task: Task = Task.ALL) -> list[SyncResult]:
+def syncVideos(notes: ExpNote, cam_cfg: CamConfig = None,                               #type:ignore
+               sync_cfg: SyncConfig = None, task: Task = Task.ALL) -> list[SyncResult]: #type:ignore
     """
     Main function to run complete synchronization pipeline
     

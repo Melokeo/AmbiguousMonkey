@@ -17,6 +17,8 @@ import subprocess
 import scipy.signal
 import matplotlib.pyplot as plt
 from diskcache import Cache
+from typing import Any
+import logging
 
 ffmpeg_path = r'C:\ffmpeg\bin\ffmpeg.exe'
 THRES_SNR = 3.2
@@ -24,6 +26,7 @@ THRES_PEAK = 1.16
 THRES_PEAK_UNSURE = 1.6
 DEBUG = False
 cache = Cache('syncAud')
+lg = logging.getLogger(__name__)
 
 def extract_audio(video_path, sample_rate=48000, duration=30, start=0):
     """
@@ -48,10 +51,10 @@ def extract_audio(video_path, sample_rate=48000, duration=30, start=0):
     except Exception as e:
         raise RuntimeError("Audio extraction failed. It's possibly because ffmpeg isn't correctly configured")
     if result.stderr:
-        print(result.stderr)
+        lg.error(result.stderr)
     audio, sr = librosa.load(temp_audio, sr=sample_rate)
     os.remove(temp_audio)
-    print(f'Extracted audio from {os.path.basename(video_path)}')
+    lg.info(f'Extracted audio from {os.path.basename(video_path)}')
     return audio, sr
 
 def compute_energy_envelope(audio, sr, hop_length=128):
@@ -62,7 +65,7 @@ def compute_energy_envelope(audio, sr, hop_length=128):
     energy = librosa.feature.rms(y=audio, hop_length=hop_length)[0]
     return energy
 
-def find_best_sync_offset(ref_audio, target_audio, sr, fps=120, hop_length=128):
+def find_best_sync_offset(ref_audio, target_audio, sr, fps:float=119.88, hop_length=128):
     """
     Finds the best synchronization offset between two audio signals using cross-correlation.
     - Converts the time offset into frame offset based on fps.
@@ -71,22 +74,25 @@ def find_best_sync_offset(ref_audio, target_audio, sr, fps=120, hop_length=128):
     target_energy = compute_energy_envelope(target_audio, sr, hop_length)
     
     correlation = scipy.signal.correlate(target_energy, ref_energy, mode='full')
-    #print(f'Paired corr {np.max(correlation)}, Mean corr {np.mean(correlation)}, max/mean = {np.max(correlation)/np.mean(correlation)}')
-    
+    lg.debug(f'Paired corr {np.max(correlation)}, Mean corr {np.mean(correlation)}, max/mean = {np.max(correlation)/np.mean(correlation)}')
 
     lag = np.argmax(correlation) - (len(ref_energy) - 1)
     
     time_offset = lag * (hop_length / sr)  
     frame_offset = round(time_offset * fps)  
     # snr = np.max(correlation)/np.mean(correlation)
-    dom, snr = has_dominant_peak(correlation, THRES_PEAK)
-    if DEBUG:
-        print(dom, snr)
-        plt.figure(figsize=(10, 4))
-        plt.plot(correlation)
-        plt.show()
-    if not dom:
-        raise ValueError(f'Sync failed: possible false sync. Peak dominence: {snr}')
+    has_dom = has_dominant_peak(correlation, THRES_PEAK)
+    if has_dom:
+        dom, snr = has_dom
+        if DEBUG:
+            lg.debug(dom, snr)
+            plt.figure(figsize=(10, 4))
+            plt.plot(correlation)
+            plt.show()
+        if not dom:
+            raise ValueError(f'Sync failed: possible false sync. Peak dominence: {snr}')
+    else:
+        raise ValueError('Sync failed: something wrong in has_dominant_peak(), return is None')
     
     return frame_offset, snr
 
@@ -100,17 +106,17 @@ def sync_videos(video_paths:list[str], fps=119.88, duration=30, start=0) -> dict
     if len(video_paths) < 2:
         raise ValueError("At least two videos are required for synchronization.")
     
-    print(f'Processing base video... Audio thres {THRES_PEAK}')
+    lg.info(f'Processing base video... Audio thres {THRES_PEAK}')
     ref_audio, sr = extract_audio(video_paths[0], duration=duration, start=start)
-    sync_results = {"reference": (video_paths[0], ref_audio, 0)}
+    sync_results: dict[str, Any] = {"reference": (video_paths[0], ref_audio, 0)}
 
     for video in video_paths[1:]:
-        print(f'Aligning video {os.path.basename(video)}...')
+        lg.info(f'Aligning video {os.path.basename(video)}...')
         target_audio, _ = extract_audio(video, duration=duration, start=start)
         try:
             frame_offset, snr = find_best_sync_offset(ref_audio, target_audio, sr, fps)
         except Exception as e:
-            print(f'Failed syncing {os.path.basename(video)}: {e}')
+            lg.error(f'Failed syncing {os.path.basename(video)}: {e}')
             frame_offset = None
         sync_results[video] = (video, target_audio, frame_offset)
 
@@ -176,16 +182,16 @@ def save_synced_waveforms(sync_results, sr, fps=119.88, duration=5, tgt_path='')
     try:
         plt.savefig(os.path.join(tgt_path,f'audio_comp_{os.path.basename(sync_results["reference"][0]).split(".")[0]}.jpg'))
     except Exception as e:
-        print(f'[ERROR] Sync result plot is not saved for {sync_results["reference"][-1]}: {e}')
+        lg.error(f'[ERROR] Sync result plot is not saved for {sync_results["reference"][-1]}: {e}')
     finally:
         plt.close()
 
-def has_dominant_peak(correlation: np.array, ratio_thresh: float = THRES_PEAK) -> tuple[bool, float]:
+def has_dominant_peak(correlation: np.ndarray, ratio_thresh: float = THRES_PEAK) -> tuple[bool, float] | None:
     from scipy.signal import find_peaks
 
     peaks, _ = find_peaks(correlation)
     if len(peaks) < 2:
-        return False
+        return None
 
     heights = correlation[peaks]
     top_two = np.partition(heights, -2)[-2:]
@@ -198,7 +204,7 @@ if __name__ == '__main__':
         r'D:\AmbiguousMonkey\errVids\C0684.mp4',
         r'D:\AmbiguousMonkey\errVids\C0643.mp4',
     ]
-    '''
+    r'''
     video_files = [
         r'D:\AmbiguousMonkey\testsync\C0565.mp4',
         r'D:\AmbiguousMonkey\testsync\C0737.mp4',
@@ -225,5 +231,5 @@ if __name__ == '__main__':
     print([i[-1] for i in frame_shifts.values()])
     save_synced_waveforms(frame_shifts, 48000, 119.88,
                            duration=30, 
-                           tgt_path='D:\AmbiguousMonkey\errVids',
+                           tgt_path=r'D:\AmbiguousMonkey\errVids',
                            )

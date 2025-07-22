@@ -82,6 +82,15 @@ checkpoints = {
             0: 'Missing all'
         }
     ),
+    'sync_calib': checkpoint(
+        'syncCalib',
+        subdir=['SynchronizedVideos', '`'],
+        condition=[r'`-cam1\.mp4', r'`-cam2\.mp4', r'`-cam3\.mp4', r'`-cam4\.mp4'],
+        interpret={
+            4: 'OK',
+            3: 'Missing 1', 2: 'Missing 2',
+        }
+    ),
     'skipsync': checkpoint(
         '.skipSync',
         subdir=['SynchronizedVideos', '`'],

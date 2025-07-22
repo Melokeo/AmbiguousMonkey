@@ -33,13 +33,13 @@ Code examples are in `ammonkey_example.py`. Here explains the ideas how it works
 - dlc == deeplabcut
 - ani == anipose
 
-### Data setup
+### 1. Data setup
 
 - Create date folder in data path using `dataSetup(raw_path | data_path)`
   - Create subfolders: SynchronizedVideos, anipose, clean
   - Create two-way shortcuts between raw and data path
 
-### Synchronization
+### 2. Synchronization
 
 - Need an object `VidSynchronizer()`
 - Setup sync detection
@@ -48,7 +48,7 @@ Code examples are in `ammonkey_example.py`. Here explains the ideas how it works
 - Run sync `results = synchronizer.syncAll()`
   - returns a dict containing success statuses
 
-### DeepLabCut
+### 3. DeepLabCut
 
 - Need an object `DLCProcessor()`
 
@@ -87,7 +87,7 @@ Code examples are in `ammonkey_example.py`. Here explains the ideas how it works
 
 
 
-### Anipose
+### 4. Anipose
 
 - Need `AniposeProcessor()`
   - Create from note + model_set_name
@@ -95,7 +95,7 @@ Code examples are in `ammonkey_example.py`. Here explains the ideas how it works
 - Setup anipose structure
 - run anipose triangulate
 
-### Finalize
+### 5. Finalize
 
 use `violentCollect()` to collect csvs into folder `clean`
 

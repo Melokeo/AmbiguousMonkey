@@ -8,10 +8,10 @@
 from pathlib import Path
 
 from .core.daet import DAET
-from .core.expNote import ExpNote, Task
+from .core.expNote import ExpNote, Task, iter_notes
 from .core.camConfig import CamGroup, CamConfig
 
-from .core.sync import syncVideos, VidSynchronizer, SyncConfig
+from .core.sync import syncVideos, VidSynchronizer, SyncConfig, SyncResult
 
 from .core.dlc import DLCProcessor, DLCModel
 from .core.dlc import (

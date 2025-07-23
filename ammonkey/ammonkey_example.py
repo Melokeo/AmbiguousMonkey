@@ -80,21 +80,28 @@ print(dlc_results)
 # 4. anipose setup and run
 from ammonkey import runAnipose, AniposeProcessor, getUnprocessedDlcData
 
-# quickly run anipose on a folder
-runAnipose(note, model_set_name='Brkm-20250620_5608')
+# in case you dont know the model_set_name, here is a function to get unprocessed sets
+model_set_names = getUnprocessedDlcData(note.data_path)
+print(model_set_names)
+if model_set_names:
+    for msn in model_set_names:
+        # quickly run anipose on a folder
+        runAnipose(note, model_set_name='Brkm-20250620_5608')
 
-# or manually, create anipose processor object
-ap = AniposeProcessor(note, model_set_name='Brkm-20250620_5608')
+        # or manually, create anipose processor object
+        ap = AniposeProcessor(note, model_set_name='Brkm-20250620_5608')
 
-# check which config and calib will be used, etc.
-print(ap.info)
+        # check which config and calib will be used, etc.
+        print(ap.info)
 
-# anipose calibration
-ap.setupCalibs()
-ap.calibrateCLI()
+        # anipose calibration
+        ap.setupCalibs()
+        ap.calibrateCLI()
 
-# triangulate. another century passed by.
-ap.triangulateCLI()
+        # triangulate. another century passed by.
+        ap.triangulateCLI()
+else:
+    print('no dlc data for anipose processing.')
 
 # ================================================================
 # now you should see under anipose/ there is a folder named after the model set

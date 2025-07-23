@@ -1,6 +1,7 @@
 '''
 a batch processing script to synchronize all unprocessed videos
 just set p then directly run it.
+(plz also change roi json save path!!)
 change debug to True if you just want to see whats not synced.
 your precious roi selection data will be saved in json.
 '''

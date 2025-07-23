@@ -11,6 +11,9 @@ from .. import monkeyUnityv1_8 as mky
 from .pullAniAll import getAllDates, convertRawToData, getCSVPathUnder
 from .silence import silence
 from ..core.daet import DAET
+import logging
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class checkpoint:
@@ -30,7 +33,8 @@ class checkpoint:
     def check(self, data_path: Path | str, daet: DAET) -> tuple[bool]:
         if isinstance(data_path, str): data_path = Path(data_path)
         subdir = subph(self.subdir, daet)
-        cond = subph(self.condition, daet)
+        cond = subph(self.condition, daet, escape=True)
+        logger.debug(f'{subdir=}, {cond=}')
 
         workdir = data_path.joinpath(*subdir)
         if not workdir.exists(): # raise FileNotFoundError(workdir)
@@ -41,7 +45,7 @@ class checkpoint:
             r = re.compile(p)
             flg = False
             for f in workdir.rglob('*'):    #TODO this can be inefficient
-                if r.fullmatch(f.name):
+                if r.search(f.name):
                     flg = True
                     break
             stat.append(flg)
@@ -186,9 +190,13 @@ checkpoints_extra = {
 
 chk_dict = checkpoints | checkpoints_anipose | checkpoints_extra
 
-def subph(x: str | list[str], replacement: str | DAET) -> str | list[str]:
+def subph(x: str | list[str], replacement: str | DAET, escape: bool = False) -> str | list[str]:
     '''SUBstitute PlaceHolder (`)'''
-    replacement = str(replacement)
+    if escape:
+        replacement = re.escape(str(replacement))
+    else:
+        replacement = str(replacement)
+
     if isinstance(x, str):
         return x.replace('`', replacement)
     elif isinstance(x, list):

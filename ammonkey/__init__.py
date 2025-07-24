@@ -23,3 +23,7 @@ from .core.dlcCollector import mergeDlcOutput, getUnprocessedDlcData
 from .core.ani import AniposeProcessor, runAnipose
 from .core.finalize import violentCollect
 from .core.fileOp import dataSetup
+
+from .utils.ol_logging import ColorLoggingFormatter
+
+import logging

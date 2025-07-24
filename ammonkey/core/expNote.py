@@ -57,6 +57,10 @@ class ExpNote:
         self._buildDaetIdx()
         self.renameDuplicateDaets()
     
+    @property
+    def sync_path(self) -> Path:
+        return self.data_path / 'SynchronizedVideos'
+
     def _buildDaetIdx(self):
         '''build index from df'''
         for _, r in self.df.iterrows():
@@ -65,9 +69,9 @@ class ExpNote:
                 if not str(daet) in self._daets.keys():
                     self._daets[str(daet)] = daet
                 else:
-                    logger.error(f'!! Duplicative daet: {str(daet)}')
+                    logger.warning(f'!! Duplicative daet: {str(daet)}')
             except ValueError as e:
-                logger.error(f'Invalid DAET during build: {e}')
+                logger.error(f'Invalid DAET during ExpNote build: {e}')
 
     def _parsePathInfo(self) -> tuple[str, str]:
         """extract animal and date from path structure"""
@@ -160,109 +164,81 @@ class ExpNote:
         return matches.iloc[0] if not matches.empty else None
     
     def getDaetSyncRoot(self, daet: DAET) -> Path:
-        return self.data_path / 'SynchronizedVideos' / str(daet)
+        return self.sync_path / str(daet)
     
     def getDaetDlcRoot(self, daet: DAET) -> Path:
-        return self.data_path / 'SynchronizedVideos' / str(daet) / 'DLC'
+        return self.getDaetSyncRoot(daet) / 'DLC'
 
-    def getVidSetIdx(self, daet: DAET|None=None, no: int|None=None) -> list[int | None]:
-        """get video IDs for DAET - crash-proof"""
+    def getVidSetIdx(self, daet: DAET|None = None, no: int|None = None) -> list[int|None]:
+        """
+        Get video IDs for a DAET, logging a warning for each invalid ID once.
+        This is the single source of truth for video IDs.
+        """
         daet = self._daetOrNumber(daet, no)
         if not daet:
-            raise ValueError(f'daet not found: {daet}')
+            raise ValueError(f'DAET not found: {daet}')
 
         rec = self.getRow(daet)
         if rec is None:
             return []
-        
+
         vids = []
         for hdr in self.cam_headers:
-            val = rec.get(hdr)  # None if column missing
-            
-            # robust None/NaN/string checking
-            if val is None or pd.isna(val) or str(val) in self.skip_markers:
+            val = rec.get(hdr)
+            if val is None or pd.isna(val) or str(val).lower() in self.skip_markers:
                 vids.append(None)
-            else:
-                try:
-                    vids.append(int(val))
-                except (ValueError, TypeError):
-                    logging.warning(f'Invalid video ID "{val}" in {hdr} for {daet}')
-                    vids.append(None)
+                continue
+            try:
+                vids.append(int(val))
+            except (ValueError, TypeError):
+                # annoying warning... :(
+                logging.warning(f'Invalid video ID "{val}" in {hdr} for {daet}')
+                vids.append(None)
         return vids
 
-    def checkVideoExistence(self, daet: DAET|None=None, no: int|None=None) -> dict[int, bool]:
-        """check if video files exist on disk for given DAET
+    def _find_vid_path(self, vid_id: int|None, cam_idx: int) -> Path|None:
+        """Private helper to find a single video file path given an ID and camera index."""
+        if vid_id is None:
+            return None
+
+        cam_folder = self.path / f'cam{cam_idx + 1}'
+        if not cam_folder.is_dir():
+            return None
+
+        # Try both 4-digit and 5-digit formats
+        for digits in [4, 5]:
+            vid_filename = f'C{vid_id:0{digits}d}.{self.video_extension}'
+            vid_path = cam_folder / vid_filename
+            if vid_path.is_file():
+                return vid_path
+        return None
+
+    def getVidSetPaths(self, daet: DAET) -> list[Path|None]:
+        """Gets all video paths for a DAET"""
+        vid_set = self.getVidSetIdx(daet)
+        if not vid_set:
+            return []
         
-        Returns:
-            dict mapping **camera index** (0-based) to existence status
-        """
-        # handle no# inputs
+        # get all paths
+        return [self._find_vid_path(vid_id, i) for i, vid_id in enumerate(vid_set)]
+
+    def getVidPath(self, daet: DAET, cam_idx: int) -> Path|None:
+        """Gets a single video file path"""
+        vid_set = self.getVidSetIdx(daet)
+        if not vid_set or not (0 <= cam_idx < len(vid_set)):
+            return None
+        
+        return self._find_vid_path(vid_set[cam_idx], cam_idx)
+
+    def checkVideoExistence(self, daet: DAET|None = None, no: int|None= None) -> dict[int, bool]:
+        """Checks if video files exist in a row"""
         daet = self._daetOrNumber(daet, no)
         if not daet:
             raise ValueError(f'Invalid daet / number: {daet=}, {no=}')
 
-        vid_set = self.getVidSetIdx(daet)
-        if not vid_set:
-            return {}
-        
-        existence = {}
-        for cam_idx, vid_id in enumerate(vid_set):
-            if vid_id is None:
-                # don't include missing video entries in result (no)
-                existence[cam_idx] = False
-                continue
-                
-            vid_path = self.getVidPath(daet, cam_idx)
-            existence[cam_idx] = not vid_path is None
-            
-        return existence
-
-    def getVidPath(self, daet: DAET, cam_idx: int) -> Path | None:
-        """get actual video file path for single DAET and camera index"""
-        vid_set = self.getVidSetIdx(daet)
-        if not vid_set or cam_idx >= len(vid_set):
-            return None
-            
-        vid_id = vid_set[cam_idx]
-        if vid_id is None:
-            return None
-            
-        cam_folder = self.path / f'cam{cam_idx + 1}'
-        if not cam_folder.exists():
-            return None
-        
-        # try both 4-digit and 5-digit formats
-        for digits in [4, 5]:
-            vid_filename = f'C{vid_id:0{digits}d}.{self.video_extension}'
-            vid_path = cam_folder / vid_filename
-            if vid_path.exists():
-                return vid_path
-                
-        return None
-    
-    def getVidSetPaths(self, daet: DAET) -> list[Path] | None:      #TODO has duplicate logic w/ above
-        '''get video paths from note, or None for non-existing file'''
-        vid_set = self.getVidSetIdx(daet)
-        if not vid_set:
-            return None
-        
-        vid_paths = []
-        for i, vid_id in enumerate(vid_set):
-            cam_folder = self.path / f'cam{i + 1}'
-            if not cam_folder.exists() or vid_id is None:
-                vid_paths.append(None)
-                continue
-            
-            for digits in [4, 5]:
-                vid_filename = f'C{vid_id:0{digits}d}.{self.video_extension}'
-                vid_path = cam_folder / vid_filename
-                if vid_path.exists():
-                    vid_paths.append(vid_path)
-                    break
-            else: # file not found, append placeholding none
-                vid_paths.append(None)
-
-        return vid_paths
+        # calls getVidSetIdx only once, indirectly.
+        vid_paths = self.getVidSetPaths(daet)
+        return {cam_idx: path is not None for cam_idx, path in enumerate(vid_paths)}
 
     def getCalibs(self, skip_void: bool = True) -> list[DAET]:
         """get list of calibration DAETs
@@ -443,6 +419,7 @@ class ExpNote:
 
     def __repr__(self) -> str:
         return f'ExperimentNotes({self.animal} {self.date} with {len(self.df)} entries)'
+
 
 def iter_notes(year_path: Path) -> Iterator[ExpNote]:
     re_date = re.compile(r'20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])')

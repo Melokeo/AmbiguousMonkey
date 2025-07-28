@@ -25,7 +25,9 @@ class AmmApp:
             font_family=self.mono_font
         )
         pg.window.height = 820
-        pg.window.width = 660
+        pg.window.width = 680
+        pg.window.icon = str(Path(__file__).parent / 'ambmky.ico')
+        pg.title = 'Ambiguous Monkey V3.0'
         # pg.scroll = ft.ScrollMode.ADAPTIVE
 
         # logging area
@@ -133,12 +135,16 @@ class AmmApp:
     def connect_loggers(self) -> None:
         flet_handler = FletLogHandler(self.log_area)
         flet_handler.setFormatter(ColorLoggingFormatter(width=85))
+
+        if __name__.startswith('ammonkey'):
+            self.lg.handlers.clear()
+        else:
+            amm_logger = logging.getLogger('ammonkey')
+            amm_logger.addHandler(flet_handler)
+            amm_logger.setLevel(logging.DEBUG)
+
         self.lg.addHandler(flet_handler)
         self.lg.setLevel(logging.DEBUG) 
-
-        """amm_logger = logging.getLogger('ammonkey')
-        amm_logger.addHandler(flet_handler)
-        amm_logger.setLevel(logging.DEBUG) """
 
         self.lg.info('Finished UI init')
 
@@ -214,8 +220,8 @@ class AmmApp:
         self.pg.update()
 
     def on_tab_change(self, e:ft.ControlEvent):
-        if not self.tabs.selected_index == 0:
-            if not lf.note:
+        if self.tabs.selected_index != 0:
+            if not lf.note and self.tabs.selected_index != 5:
                 self.lg.warning(f'Note is not set')
                 self.tabs.selected_index = 0
                 self.pg.update()

@@ -20,7 +20,10 @@ from pathlib import Path
 import filecmp
 import json
 import pandas as pd
-import win32com.client
+
+from platform import system
+if system() == 'Windows':
+    import win32com.client
 
 from .utils import VidSyncLED as Sync
 from .utils import VidSyncAud as SyncAud
@@ -793,6 +796,8 @@ def runAnipose(ani_base_path:str=None, run_combined = False):
 
 def two_way_shortcuts(path1, path2):
     """Creates two-way shortcuts"""
+    if not system() == 'Windows':
+        return
     shell = win32com.client.Dispatch("WScript.Shell")
     
     # Define shortcut paths

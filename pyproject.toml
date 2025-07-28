@@ -37,7 +37,7 @@ dependencies = [
     "librosa",
     "openpyxl",
     # conditional dependency for Windows-specific features
-    "pywin32~=310; sys_platform=='win32'",
+    "pywin32~=310.0; sys_platform=='win32'",
     "opencv-python==4.11.0.86",
 ]
 

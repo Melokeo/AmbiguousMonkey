@@ -104,10 +104,23 @@ class ColCamCfgs(ft.Column):
 
     def build(self):
         self.rows.clear()
-        self.rows = [
-            RowCamCfg(cam, self.lg).generate_container()
-            for cam in self.cams
-        ]
+        '''elem_count = 0
+        elem_per_row = 2
+        ctrls = []
+        row = []
+        for cam in self.cams:
+            if elem_count < elem_per_row:
+                row.append(RowCamCfg(cam, self.lg).generate_container())
+                elem_count += 1
+            else:
+                elem_count = 0
+                ctrls.append(ft.Row(row))
+                row.clear()
+        if not row:
+            ctrls.append(ft.Row(row))
+                
+        self.rows = ctrls'''
+        self.rows = [RowCamCfg(cam, self.lg).generate_container() for cam in self.cams]
         self.controls = [ft.ListView(
             controls=self.rows,
             expand=True, 

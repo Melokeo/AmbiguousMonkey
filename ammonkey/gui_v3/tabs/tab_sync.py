@@ -48,8 +48,9 @@ class TabSync:
         self.col = ft.Column(
             controls=[
                 self.col_cams,
+                ft.Row([self.btn_create_vs], ft.MainAxisAlignment.CENTER),
                 ft.Row([self.btn_check_all, self.btn_set_all], ft.MainAxisAlignment.CENTER),
-                ft.Row([self.btn_create_vs, self.btn_sync_all], ft.MainAxisAlignment.CENTER),
+                ft.Row([self.btn_sync_all], ft.MainAxisAlignment.CENTER),
                 self.syncing_row,
             ],
             spacing=10,

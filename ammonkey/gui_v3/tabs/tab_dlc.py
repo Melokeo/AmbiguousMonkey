@@ -15,6 +15,7 @@ class TabDlc:
                 for dp in available_dp
             ],
             on_change=self.on_model_change,
+            label = 'Model',
         )
 
         self.btn_init = ft.ElevatedButton(

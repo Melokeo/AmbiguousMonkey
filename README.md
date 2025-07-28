@@ -16,6 +16,8 @@ Previous GUI is kept and still works itself but the file structure is outdated f
 
 ## Dependency
 
+Considering that deeplabcut requires conda environment, it is recommended to install this package with deeplabcut in the same conda environment.
+
 See `amm-env.yaml`. Some syntaxes require Python >= 3.10.
 
 ## Workflow

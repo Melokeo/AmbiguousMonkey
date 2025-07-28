@@ -1,0 +1,85 @@
+# pyproject.toml
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ammonkey"
+version = "3.0"
+authors = [
+  { name="Mel Xu", email="penkonno@gmail.com" },
+]
+description = "A package for processing and analyzing primate behavior videos using DeepLabCut, Anipose, and a custom GUI."
+readme = "README.md"
+requires-python = "~=3.10"
+license = { text="MIT License" }
+keywords = ["neuroscience", "computer vision", "behavior analysis", "deeplabcut", "anipose"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Scientific/Engineering",
+    "Intended Audience :: Science/Research",
+]
+
+# Core dependencies
+dependencies = [
+    "pandas",
+    "numpy==1.26.4",
+    "scipy",
+    "matplotlib",
+    "diskcache",
+    "tqdm",
+    "librosa",
+    "openpyxl",
+    # conditional dependency for Windows-specific features
+    "pywin32~=310; sys_platform == 'win32'",
+    "opencv-python==4.11.0.86",
+]
+
+[project.urls]
+Homepage = "https://github.com/melokeo/AmbiguousMonkey"
+"Bug Tracker" = "https://github.com/melokeo/AmbiguousMonkey/issues"
+Documentation = "https://github.com/Melokeo/AmbiguousMonkey/blob/main/README.md"
+
+[project.scripts]
+ammonkey = "ammonkey.gui_v3.flet_main:main"
+
+# Optional dependencies for different features
+[project.optional-dependencies]
+gui = [
+    "flet~=0.28.3",
+]
+da = [
+    "deeplabcut==3.0.0rc7",
+    "tensorflow==2.10.*",
+    "tensorpack",
+    "tf-slim",
+    "qtpy",
+    "torch==2.0.1",
+    "torchvision==0.15.2",
+    "torchaudio==2.0.2",
+    "qdarkstyle",
+    "napari",
+    "napari_deeplabcut",
+    "anipose",
+]
+dev = [
+    "pytest",
+    "black",
+    "twine",
+    "build",
+]
+all = [
+    "ammonkey[gui,cv,dev]",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ammonkey*"]
+# Exclude folders that are not part of the package
+exclude = ["tests*", "scripts*"]

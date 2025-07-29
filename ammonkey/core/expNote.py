@@ -7,6 +7,7 @@ import pandas as pd
 from enum import Enum, auto
 import re
 from typing import Iterator
+import os, glob
 
 from .fileOp import getDataPath
 from .daet import DAET, Task
@@ -41,8 +42,11 @@ class ExpNote:
 
     def __post_init__(self):
         self.path = Path(self.path)
+        if self.path.is_file() and self.path.name.endswith('.xlsx'):
+            self.path = self.path.parent
+
         self.animal, self.date = self._parsePathInfo()
-        
+
         xlsx_path = self.path / f'{self.animal}_{self.date}.xlsx'
         if not xlsx_path.exists():
             raise FileNotFoundError(f'Notes file not found: {xlsx_path}')
@@ -56,10 +60,24 @@ class ExpNote:
         self._daets: dict[str, DAET] = {}
         self._buildDaetIdx()
         self.renameDuplicateDaets()
+
+        self._daets_by_task: dict[Task, list[DAET]] = {}
+        for daet in self.daets:
+            if daet.task_type is not None:
+                self._daets_by_task.setdefault(daet.task_type, []).append(daet)
     
     @property
     def sync_path(self) -> Path:
         return self.data_path / 'SynchronizedVideos'
+    
+    @property
+    def daets_by_task(self) -> dict[Task, list[DAET]]:
+        return self._daets_by_task
+    
+    @property
+    def has_calib(self) -> bool:
+        '''whether this note obj contains at least one Task.CALIB entry'''
+        return Task.CALIB in self.getAllTaskTypes()
 
     def _buildDaetIdx(self):
         '''build index from df'''
@@ -74,7 +92,7 @@ class ExpNote:
                 logger.error(f'Invalid DAET during ExpNote build: {e}')
 
     def _parsePathInfo(self) -> tuple[str, str]:
-        """extract animal and date from path structure"""
+        """extract animal and date from path structure""" # fragile
         parts = self.path.parts
         # flexible: try common patterns
         if len(parts) >= 4 and parts[-4].lower() in ['pici']: 
@@ -438,6 +456,38 @@ def iter_notes(year_path: Path) -> Iterator[ExpNote]:
                 break
             else:
                 logger.warning(f'No note found under {folder_date.name}')
+
+def iter_xlsx(root_dir: str, nesting_level: int = 2) -> Iterator[str]:
+    """
+    Scans a directory for .xlsx files at a specific nesting level.
+    suddenly using os/glob because its much faster than Path.glob()
+    """
+    path_components = ['*'] * nesting_level + ['*.xlsx']
+    search_pattern = os.path.join(root_dir, *path_components)
+    all_paths = glob.glob(search_pattern)
+    all_paths = [
+        p for p in all_paths
+        if not os.path.basename(p).startswith("~$")
+        and len(os.path.basename(p).split('.')[-2].split('_')[-1])==8
+    ]   # temp files
+    all_paths.sort()
+    return iter(all_paths)
+
+def get_xlsx_dates(root_dir: str, nesting_level: int = 2) -> list[str]:
+    """
+    Scans a directory and returns a list of date strings from the filenames.
+    ['yyyymmdd',  ...]
+    """
+    date_list = []
+    for file_path in iter_xlsx(root_dir, nesting_level=nesting_level):
+        filename = os.path.basename(file_path)
+        name_without_ext = os.path.splitext(filename)[0]
+        date_part = name_without_ext.split('_')[-1]
+        # shoulg look like a date, this is fragile though
+        if date_part.isdigit() and len(date_part) == 8:
+            date_list.append(date_part)
+            
+    return date_list
 
 def mian() -> None:
     '''xiang chi mian le [usage example]'''

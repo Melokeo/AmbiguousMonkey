@@ -85,7 +85,7 @@ class DAET:
         if len(p) > 4:
             parts[3] = p.pop(-1)
             parts[0] = p.pop(0)
-            parts[1] = p.pop(1)
+            parts[1] = p.pop(0)
             parts[2] = '-'.join(p)
         elif len(p) < 4:
             raise ValueError(f"Invalid DAET format: {daet_str}")

@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 dlc_postfix_pattern = re.compile(r'DLC_resnet\d+_[^_]+shuffle\d+_\d+(?:_filtered)?\.h5$')
+LIB_HAND = Path.home() / 'Documents/Python Scripts/calib history/arm4'
+LIB_ARM  = Path.home() / 'Documents/Python Scripts/calib history/hand2'
 
 def getH5Rename(file_name:Path | str, stem_only:bool=False) -> str:
     '''get rid of dlc postfix'''
@@ -31,7 +33,7 @@ def getH5Rename(file_name:Path | str, stem_only:bool=False) -> str:
     )
 
 def insertModelToH5Name(file_name:Path | str) -> str: 
-    pass
+    return ''
 
 @dataclass
 class CalibLib:
@@ -41,7 +43,7 @@ class CalibLib:
         '''index available calibs'''
         self.lib: dict[int, list[Path]] = {}
         self.updateLibIndex()
-
+        
     def updateLibIndex(self):
         date_pattern = re.compile(r'\d{8}')
         if not self.lib_path.exists():
@@ -49,11 +51,19 @@ class CalibLib:
         for calib in self.lib_path.glob('*.toml'):
             if not 'calibration' in calib.name:
                 continue
-            date = int(re.search(date_pattern, calib.name).group()) #type:ignore
+            date_re = re.search(date_pattern, calib.name)
+            if date_re:
+                date = int(date_re.group())
+            else:
+                logger.debug(f'{calib.parent/calib.name} - calibration file without date')
+                continue
             if date in self.lib.keys():
                 self.lib[date].append(calib)
             else:
                 self.lib[date] = [calib]
+        if not self.lib.keys():   # no calib found
+            pass
+            #TODO implement first-run 
 
     def lookUp(self, date: int) -> Path | None:
         calibs = self.lib.get(date)
@@ -83,7 +93,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
     model_set_name: str
     conda_env: str = 'anipose-3d'
     config_file: Path = None    #type:ignore
-    calib_file: Path = None     #type:ignore
+    calib_file: Path | None = None     
     calib_lib: CalibLib = None  #type:ignore
 
     def __post_init__(self):
@@ -94,6 +104,9 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             self.config_file = self.getCfgFile()
         if not self.calib_file:
             self.calib_file = self.getCalibFile()
+            if not self.calib_file:
+                logger.warning('Note has no matching calib file, need calib first')
+
     
     def __repr__(self):
         return f'AniposeProcessor({self.note.date}, model_set={self.model_set_name})'
@@ -119,9 +132,9 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
     def getCalibLib(self, model_set_name:str) -> CalibLib:
         '''here maps model set to the calibration lib'''
         if 'TS' in model_set_name or 'Pull' in model_set_name:
-            return CalibLib(Path(r'C:\Users\mkrig\Documents\Python Scripts\calib history\arm4'))
+            return CalibLib(LIB_ARM)
         elif 'Brkm' in model_set_name or 'BBT' in model_set_name:
-            return CalibLib(Path(r'C:\Users\mkrig\Documents\Python Scripts\calib history\hand2'))
+            return CalibLib(LIB_HAND)
         else:
             raise ValueError(f'Cannot get calib lib for unrecognized set: {model_set_name}')
 
@@ -135,11 +148,13 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         else:
             return cfg_path / 'config.toml'
     
-    def getCalibFile(self) -> Path:
+    def getCalibFile(self) -> Path | None:
         '''determine calib file from note, with calib library as fallback'''
         calib = self.calib_lib.lookUp(int(self.note.date))
-        if calib is None:
-            raise ValueError(f'AniposeProcessor: cannot find this date\'s calib file {self.note.date}')
+        if calib is None: # check if this note carries calib itself
+            if not self.note.has_calib:
+                raise ValueError(f'AniposeProcessor: cannot find this date\'s calib file {self.note.date}')
+            return None
         else:
             return calib
         
@@ -232,7 +247,9 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         '''setup only the root folder'''
         if not self.config_file.exists():
             raise ValueError(f'AniposeProcessor: assigned config file doesn\'t exist: {self.config_file}')
-        if not self.calib_file.exists():
+        if not self.calib_file:
+            logger.warning('No calib file. you may NOT continue triangulation before calibrate.')
+        elif not self.calib_file.exists():
             raise ValueError(f'AniposeProcessor: assigned calib file doesn\'t exist: {self.config_file}')
         
         self.ani_root_path.mkdir(exist_ok=True)
@@ -288,7 +305,8 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         
         # copy calibration.toml
         try:
-            shutil.copy(self.calib_file, daet_ani_root / 'calibration' / 'calibration.toml')
+            if self.calib_file:
+                shutil.copy(self.calib_file, daet_ani_root / 'calibration' / 'calibration.toml')
         except OSError as e:
             logger.error(f'setupSingleDaet: failed copying {self.calib_file} -> {daet}, err: {e}')
 
@@ -360,10 +378,13 @@ def runAnipose(note:ExpNote, model_set_name:str):
     except ImportError:
         ani_flag = False
 
+    ani_flag = False # for now
+
     logger.info(f'Into switch: anipose {ani_flag}')
     if ani_flag:
         logger.info('calibrating')
         ap.calibrate()
+        ap.setupRoot()
 
         logger.info('setting up data')
         ap.batchSetup()
@@ -374,6 +395,7 @@ def runAnipose(note:ExpNote, model_set_name:str):
     else:
         logger.info('calibrating')
         ap.calibrateCLI()
+        ap.setupRoot()
 
         logger.info('setting up data')
         ap.batchSetup()

@@ -252,14 +252,21 @@ class VidSynchronizer:
                     led_starts.append(-1)
                 else:
                     roi = self.cam_config.rois[cam_num]
-                    led_color = self.cam_config.led_colors[cam_num]
+                    led_color = self.cam_config.cams_dict[cam_num].led_color.value
+                    if led_color is None:
+                        logger.error(f'Wrong LED color!! {led_color}')
+                        continue
+
                     sync_detection_path = self._getSyncDetectionPath()
-                    
+    
+                    logger.debug(f'Starting detection {str(vid_path)=}, {roi=}, {self.config.led_threshold=}, \
+                        {led_color=}, {str(sync_detection_path)=}')
                     start_frame = SyncLED.find_start_frame(
                         str(vid_path), roi, self.config.led_threshold, 
                         led_color, str(sync_detection_path)
                     )
                     led_starts.append(start_frame)
+                    logger.info(f'Detection found LED on frame {start_frame}')
                     
             except Exception as e:
                 self.wood.logger.warning(f"LED detection failed for {daet} cam{cam_num}: {e}")

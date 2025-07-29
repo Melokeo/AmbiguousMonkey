@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime
 from hashlib import md5
 
-from .expNote import ExpNote
+from .expNote import ExpNote, Task
 from .camConfig import CamGroup
 from .daet import DAET
 from .dlcCollector import mergeDlcOutput, getDLCMergedFolderName
@@ -371,5 +371,27 @@ def modelPreset(preset:str) -> DLCModel:
     #if preset == 'Pull-Hand':
     #    return DLCModel('TS-RJan30', Path(r"D:\DeepLabCut\TS-R-shaved-N\config.yaml"), iteration=0, shuffle=7, short='Pull-Hand')
     raise ValueError(f'Unknown preset {preset}')
-    
-    
+
+#TODO below should be wrapped in another dataclass.
+
+available_models = [
+    'TS-L', 'TS-R', 'Pull-L', 'Pull-R', 'Brkm', 'BBT'
+]
+
+available_dp = [
+    'TS-LR', 'Pull-LR', 'Brkm', 'BBT'
+]
+
+dp_task = {
+    'TS-LR':    Task.TS,
+    'Pull-LR':  Task.PULL,
+    'Brkm':     Task.BRKM,
+    'BBT':      Task.BBT,
+}
+
+dp_factory = {
+    'TS-LR':    createProcessor_TS,
+    'Pull-LR':  createProcessor_Pull,
+    'Brkm':     createProcessor_Brkm,
+    'BBT':      createProcessor_BBT,
+}

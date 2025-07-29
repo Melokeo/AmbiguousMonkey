@@ -4,6 +4,7 @@ File operations centered
 
 import os, logging, platform, sys
 from pathlib import Path
+import pythoncom
 
 try:
     import win32com.client
@@ -55,23 +56,28 @@ def twoWayShortcuts(path1:str, path2:str) -> None:
     if not 'win32com' in sys.modules:
         logger.warning('shortcut not created due to no win32com')
         return
-    shell = win32com.client.Dispatch("WScript.Shell")   #type:ignore
     
-    # Define shortcut paths
-    shortcut1_path = os.path.join(path1, os.path.basename(path2) + ".lnk")
-    shortcut2_path = os.path.join(path2, os.path.basename(path1) + ".lnk")
+    pythoncom.CoInitialize()
+    try:
+        shell = win32com.client.Dispatch("WScript.Shell") #type:ignore
+    
+        # Define shortcut paths
+        shortcut1_path = os.path.join(path1, os.path.basename(path2) + ".lnk")
+        shortcut2_path = os.path.join(path2, os.path.basename(path1) + ".lnk")
 
-    # Create shortcut from path1 → path2
-    shortcut1 = shell.CreateShortcut(shortcut1_path)
-    shortcut1.TargetPath = path2
-    shortcut1.WorkingDirectory = path2
-    shortcut1.Save()
+        # Create shortcut from path1 → path2
+        shortcut1 = shell.CreateShortcut(shortcut1_path)
+        shortcut1.TargetPath = path2
+        shortcut1.WorkingDirectory = path2
+        shortcut1.Save()
 
-    # Create shortcut from path2 → path1
-    shortcut2 = shell.CreateShortcut(shortcut2_path)
-    shortcut2.TargetPath = path1
-    shortcut2.WorkingDirectory = path1
-    shortcut2.Save()
+        # Create shortcut from path2 → path1
+        shortcut2 = shell.CreateShortcut(shortcut2_path)
+        shortcut2.TargetPath = path1
+        shortcut2.WorkingDirectory = path1
+        shortcut2.Save()
 
-    print(f"Shortcut created: {shortcut1_path} → {path2}")
-    print(f"Shortcut created: {shortcut2_path} → {path1}")
+        print(f"Shortcut created: {shortcut1_path} → {path2}")
+        print(f"Shortcut created: {shortcut2_path} → {path1}")
+    finally:
+        pythoncom.CoUninitialize()  # clean up

@@ -4,10 +4,10 @@ File operations centered
 
 import os, logging, platform, sys
 from pathlib import Path
-import pythoncom
 
 try:
     import win32com.client
+    import pythoncom
 except ImportError:
     pass
 

@@ -1,5 +1,7 @@
 # Ambiguous Monkey
 
+> Package is running on windows by manually placing it in site-packages. Installation through pip is WIP
+
 A fully rewritten deeplabcut+anipose data managing and processing package
 
 Mel

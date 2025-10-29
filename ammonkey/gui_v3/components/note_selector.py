@@ -5,8 +5,12 @@ import flet as ft
 
 from .. import landfill as lf
 from ...core.expNote import ExpNote, DAET, Task
+from ...core.statusChecker import StatusChecker
 
 class ColNoteSelector(ft.Column):
+    '''
+    The panel that displays entries from ExpNote, with file status indicators
+    '''
     def __init__(self, 
                  logger: logging.Logger|None = None, 
                  unlocker_func: Callable|None = None):
@@ -35,6 +39,7 @@ class ColNoteSelector(ft.Column):
 
     def assemble(self) -> None:
         self.selected_daets: set[DAET] = set(lf.note.daets)
+        self.stat_checker = StatusChecker(lf.note)
 
         # self.task_chips_map
         self._init_task_chips()
@@ -83,6 +88,9 @@ class ColNoteSelector(ft.Column):
             raise ValueError('selector refresh_note: ExpNote is None.')
             return
         self.clear_daets()
+        # show a spinner for waiting
+        self.controls = [ft.ProgressRing()]
+        self.update()
         self.assemble()
         self.lg.info(f'Refreshed {lf.note}')
         self.update()
@@ -115,7 +123,8 @@ class ColNoteSelector(ft.Column):
         video_paths = lf.note.getVidSetPaths(daet)
         checkbox = self.daet_checkboxes[daet]
 
-        video_indicators = ft.Row(spacing=5, alignment=ft.MainAxisAlignment.END)
+        # video file physical stat indicators
+        video_indicators = []
         for i, path in enumerate(video_paths):
             has_path = path is not None
             if has_path:
@@ -132,7 +141,7 @@ class ColNoteSelector(ft.Column):
                 name = ft.Icons.CANCEL_OUTLINED
                 color = ft.Colors.RED_400
 
-            video_indicators.controls.append(
+            video_indicators.append(
                 ft.Icon(
                     name=name,
                     color=color,
@@ -140,12 +149,47 @@ class ColNoteSelector(ft.Column):
                     tooltip=tooltip_message
                 )
             )
+        
+        # daet processing stat indicators
+        stat_indicators = []
+        # sync stat
+        sync_stat, sync_text = self.stat_checker.check_sync_single_daet(daet)
+        if sync_stat:
+            sync_icon = ft.Icon(
+                name=ft.Icons.ALIGN_HORIZONTAL_RIGHT, 
+                size=18,
+                tooltip="Synced",
+            )
+            stat_indicators.append(sync_icon)
+        # DLC stat
+        dlc_stat, dlc_text = self.stat_checker.check_dlc_single_daet(daet)
+        if dlc_stat:
+            dlc_icon = ft.Icon(
+                name=ft.Icons.MEMORY, 
+                size=18,
+                tooltip=dlc_text,
+            )
+            stat_indicators.append(dlc_icon)
+        # Anipose stat
+        ani_stat, ani_text = self.stat_checker.check_ani_single_daet(daet)
+        if ani_stat:
+            ani_icon = ft.Icon(
+                name=ft.Icons.THREED_ROTATION, 
+                size=18,
+                tooltip=ani_text,
+            )
+            stat_indicators.append(ani_icon)
+
+        indicators = ft.Row(
+            spacing=5, alignment=ft.MainAxisAlignment.END,
+            controls=stat_indicators + video_indicators
+        )
 
         return ft.Container(
             content=ft.Row(
                 [
                     ft.Row([checkbox, ft.Text(str(daet))]),
-                    video_indicators,
+                    indicators,
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
@@ -253,5 +297,5 @@ def main(pg:ft.Page):
     pg.update()
 
 if __name__ == '__main__':
-    lf.note = ExpNote(r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025\06\20250623') #type:ignore
+    lf.note = ExpNote(r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025\09\20250902') #type:ignore
     ft.app(main)

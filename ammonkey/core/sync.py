@@ -509,8 +509,8 @@ class VidSynchronizer:
 
 # === Usage Function ===
 
-def syncVideos(notes: ExpNote, cam_cfg: CamConfig = None,                               #type:ignore
-               sync_cfg: SyncConfig = None, task: Task = Task.ALL) -> list[SyncResult]: #type:ignore
+def syncVideos(notes: ExpNote, cam_cfg: CamConfig|None = None,                              
+               sync_cfg: SyncConfig|None = None, task: Task = Task.ALL) -> list[SyncResult]:
     """
     Main function to run complete synchronization pipeline
     

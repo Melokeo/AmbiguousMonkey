@@ -1,6 +1,7 @@
 '''
 the Date-Animal-Experiment-Task identifier used to index task entries
 '''
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,10 +13,33 @@ import pandas as pd
 class Task(Enum):
     ALL = auto()
     TS = auto() 
+    PULL = auto()
     BBT = auto()
     BRKM = auto()
-    PULL = auto()
     CALIB = auto()
+
+    # Task.ANYTHING.pattern -> list[str] of matching patterns
+    # Task.match(str) -> Task | None return matching Task enum
+
+    @property
+    def pattern(self) -> list[str]:
+        """return list[str] of matching patterns for this task"""
+        return task_match[self]   
+
+    @classmethod
+    def match(cls, daet_name: DAET | str) -> Task | None:
+        """return single Task enum matching the experiment_str, or None if no match
+        possible multi-match not handled, will return first match found in task_match order"""
+        if isinstance(daet_name, DAET):
+            daet_name = daet_name.experiment
+
+        exp_str_lower = daet_name.lower()
+        for task, patterns in task_match.items():
+            if task == Task.ALL:
+                continue
+            if any(p for p in patterns if p in exp_str_lower):
+                return task
+        return None
 
 task_match = {  # all should be lowercase
     Task.BBT: ['bbt'],
@@ -96,7 +120,14 @@ class DAET:
     @classmethod 
     def fromRow(cls, row: pd.Series, date: str, animal: str) -> 'DAET':
         """create DAET from pandas row"""
-        return cls(date, animal, str(row['Experiment']).strip(), str(row['Task']).strip())
+        task = row['Task']
+        if isinstance(task, float) and task.is_integer():
+            s = str(int(task))
+        else:
+            s = str(task)
+        if animal.lower() == 'pici':
+            s = str(task)       # this is historical problem.
+        return cls(date, animal, str(row['Experiment']).strip(), s.strip())
     
     # useful properties
     @property

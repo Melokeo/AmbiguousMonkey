@@ -96,8 +96,10 @@ def getDLCMergedFolderName(f1: Path, f2: Path | None) -> str:
         return f'TS-LR-{f1_info[1]}_{mergeId(f1_info[2], f2_info[2])}'
     elif 'Pull' in f1_info[0] and 'Pull' in f2_info[0]:
         return f'Pull-LR-{f1_info[1]}_{mergeId(f1_info[2], f2_info[2])}'
+    elif 'fus-arm' in f1_info[0] and 'fus-arm' in f2_info[0]:
+        return f'fus-arm-{f1_info[1]}_{mergeId(f1_info[2], f2_info[2])}'
     
-    raise ValueError(f'Unsupported model set: {f1.name} and {f2.name}') 
+    raise ValueError(f'Unsupported model set: {f1.name} and {f2.name}') #type:ignore
 
 def getDLCMergedNameShort(f1: Path, f2: Path) -> str:
     '''logic for determining merged dlc folder name. expandable.'''
@@ -127,7 +129,7 @@ def parseDLCFolderName(f: Path) -> tuple[str, int, int]:
 
 def searchModelSets(data_path: Path|None) -> set[str] | None:
     if not data_path: return None
-    pattern = re.compile(r'^(Pull-LR|Brkm|BBT|TS-LR)-\d{8}_\d{3,4}$')
+    pattern = re.compile(r'^(Pull-LR|Brkm|BBT|TS-LR|Pull-Hand|fus-arm)-\d{8}_\d{3,4}$')
     seen = set()
     for file in Path(data_path).rglob('*'):
         if pattern.fullmatch(file.name) and file.name not in seen:
@@ -141,6 +143,7 @@ def getDaetsUnderModel(
         note: ExpNote|None = None,
 ) -> list[str] | None:
     '''given "./SynchronizedVideos", return the DAETs involved'''
+    logger.debug(f'getDaetsUnderModel: {sync_root_path=}, {model_name=}')
     if not sync_root_path.exists():
         raise FileNotFoundError(f'getDaetsUnderModel: {sync_root_path} doesnt exist')
     
@@ -160,12 +163,13 @@ def getDaetsUnderModel(
         dlc_model_path = daet_folder / 'DLC' / model_name        #FIXME this is fragile
         if not dlc_model_path.exists():
             logger.debug(f'Skipped {dlc_model_path}, does not exist')
-            return
+            continue
         seen_daets.append(daet_folder.name)
     
+    # logger.debug(f'{seen_daets=}')
     return seen_daets
 
-def isAniProcessed(ani_path: Path, sync_root_path: Path, ap: AniposeProcessor|None = None) -> int:  #FIXME if a folder is just copied with calib, it doesnt show as need ani
+def isAniProcessed(ani_path: Path, sync_root_path: Path, ap: AniposeProcessor|None = None, note: ExpNote | None = None) -> int:  #FIXME if a folder is just copied with calib, it doesnt show as need ani
     '''0: totally not; 1: fully processed (csv_count==daet_count); -1: partly processed'''
     if not ani_path.exists():
         return False
@@ -186,11 +190,9 @@ def isAniProcessed(ani_path: Path, sync_root_path: Path, ap: AniposeProcessor|No
 
     logger.debug(f'{ani_path=}, {process_stat=}')
     
-    if all(process_stat):
-        if ap:
+    if all(process_stat.values()):
+        if ap and not note:
             note = ap.note
-        else:
-            note = None
         daet_namelist = getDaetsUnderModel(sync_root_path=sync_root_path, model_name=ani_path.name, note=note)
         logger.debug(f'{daet_namelist=}')
         if daet_namelist:
@@ -199,12 +201,12 @@ def isAniProcessed(ani_path: Path, sync_root_path: Path, ap: AniposeProcessor|No
             else:
                 return -1
         else: return 1
-    elif any(process_stat):
+    elif any(process_stat.values()):
         return -1
     else:
         return 0
 
-def getUnprocessedDlcData(data_path: Path, ap: AniposeProcessor|None = None) -> list[str]|None:
+def getUnprocessedDlcData(data_path: Path, ap: AniposeProcessor|None = None, note: ExpNote|None=None) -> list[str]|None:
     '''
     input a data_path, then 
     '''
@@ -220,7 +222,7 @@ def getUnprocessedDlcData(data_path: Path, ap: AniposeProcessor|None = None) -> 
     
     unprocessed:list[str] = []
     for p in sets:
-        if_ap = isAniProcessed(ani_path=data_path / 'anipose' / p, sync_root_path=sync_root_path, ap=ap)
+        if_ap = isAniProcessed(ani_path=data_path / 'anipose' / p, sync_root_path=sync_root_path, ap=ap, note=note)
         logger.debug(if_ap)
         if if_ap in [0, -1]:
             unprocessed.append(p)

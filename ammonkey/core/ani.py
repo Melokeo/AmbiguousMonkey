@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .expNote import ExpNote
 from .daet import DAET
+from .config import Config
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -45,6 +46,7 @@ class CalibLib:
         self.updateLibIndex()
         
     def updateLibIndex(self):
+        """index available calib files"""
         date_pattern = re.compile(r'\d{8}')
         if not self.lib_path.exists():
             raise FileNotFoundError(f'CalibLib: passed non-existing lib path {self.lib_path}')
@@ -66,6 +68,7 @@ class CalibLib:
             #TODO implement first-run 
 
     def lookUp(self, date: int) -> Path | None:
+        """look up calib file for given date, with fallback to closest prior date"""
         calibs = self.lib.get(date)
         if calibs: 
             return calibs[0]
@@ -78,6 +81,7 @@ class CalibLib:
                 return None
         
     def getClosestBackward(self, target: int) -> int | None:
+        """get closest date in the lib keys for given target"""
         keys = sorted(self.lib.keys())
         idx = bisect.bisect_right(keys, target) - 1
         return keys[idx] if idx >= 0 else None
@@ -102,6 +106,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             self.calib_lib = self.getCalibLib(self.model_set_name)
         if not self.config_file:
             self.config_file = self.getCfgFile()
+            logger.debug(f'{self.config_file=}')
         if not self.calib_file:
             self.calib_file = self.getCalibFile()
             if not self.calib_file:
@@ -131,22 +136,26 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
     
     def getCalibLib(self, model_set_name:str) -> CalibLib:
         '''here maps model set to the calibration lib'''
-        if 'TS' in model_set_name or 'Pull' in model_set_name:
-            return CalibLib(LIB_ARM)
-        elif 'Brkm' in model_set_name or 'BBT' in model_set_name:
+        if 'Brkm' in model_set_name or 'BBT' or 'Hand' in model_set_name:
             return CalibLib(LIB_HAND)
+        elif 'TS' in model_set_name or 'Pull' in model_set_name:
+            return CalibLib(LIB_ARM)
         else:
             raise ValueError(f'Cannot get calib lib for unrecognized set: {model_set_name}')
 
     def getCfgFile(self) -> Path:
         '''get cfg based on model_set_name'''
         cfg_path = BASE_DIR / 'cfgs'
-        if 'TS' in self.model_set_name or 'Pull' in self.model_set_name:
-            return cfg_path / 'config_arm.toml'
-        elif 'Brkm' in self.model_set_name or 'BBT' in self.model_set_name:
-            return cfg_path / 'config_hand.toml'
-        else:
-            return cfg_path / 'config.toml'
+        cfg_matching = Config.anipose_cfgs
+        for k, v in cfg_matching.items():
+            if k in self.model_set_name:
+                cfg_file = cfg_path / v
+                if not cfg_file.exists():
+                    raise FileNotFoundError(f'{self.model_set_name} should use {v}, but {cfg_file} doesnt exist')
+                return cfg_path / v
+        
+        logger.warning(f'No match found for {self.model_set_name}, using default config!')
+        return cfg_path / 'config.toml'
     
     def getCalibFile(self) -> Path | None:
         '''determine calib file from note, with calib library as fallback'''
@@ -186,13 +195,35 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
                 logger.error(f'ssc copy failed {e}')
     
     def setupCalibs(self) -> None:
+        if self.isCalibDone():
+            logger.debug(f'skipped setup calib: {self.note.getCalibs()} already done')
+            return
         for daet in self.note.getCalibs():
             self.setupSingleCalib(daet)
+    
+    def isCalibDone(self) -> bool:
+        """check if **all** calibs are done"""
+        calibs: list[DAET] = self.note.getCalibs()
+        curr_lib = self.calib_lib.lib.get(int(self.note.date), None)
+        if not curr_lib: 
+            return False
+        return all(
+                any(
+                    str(daet) in calib_file.stem
+                    for calib_file in curr_lib
+                )
+                for daet in calibs
+            )
 
-    def calibrateCLI(self) -> None:
+    def calibrateCLI(self, override_existing:bool = False) -> None:
         '''CLI anipose'''
         if not (self.ani_root_path / 'config.toml').exists():
             self.setupRoot()
+
+        if self.isCalibDone():
+            logger.debug(f'skipped calib: {self.note.getCalibs()} already done')
+            return
+
         cmd = [
             'conda', 'activate', self.conda_env, '&&',
             'P:', '&&',
@@ -229,11 +260,13 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             return True
 
     def collectCalibs(self) -> None:
+        """store anipose calculated calib files in calib lib"""
         for daet in self.note.getCalibs():
             daet_calib_toml = self.ani_root_path / str(daet) / 'calibration' / 'calibration.toml'
             if daet_calib_toml.exists():
                 new_name = f'calibration-{str(daet)}.toml'
                 try:
+                    logger.debug(f'{daet_calib_toml} -> {self.calib_lib.lib_path}')
                     shutil.copy(daet_calib_toml, self.calib_lib.lib_path / new_name)
                 except OSError as e:
                     logger.error(f'collectCalib copy failed {e}')
@@ -253,10 +286,11 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             raise ValueError(f'AniposeProcessor: assigned calib file doesn\'t exist: {self.config_file}')
         
         self.ani_root_path.mkdir(exist_ok=True)
+        logger.info(f'using {self.config_file=}')
         shutil.copy(self.config_file, self.ani_root_path / 'config.toml')
 
     def setupSingleDaet(self, daet:DAET, use_filtered:bool=True, copy_videos:bool=False) -> None:
-        '''setup'''
+        '''setup anipose folder for single daet: copy h5, calib, and videos if needed'''
         # prepare ingredients
         if not self.note.hasDaet(daet):
             raise ValueError(f'setupSingleDaet: trying to process non-existing daet {daet}')
@@ -352,6 +386,39 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             return False
         else:
             return True
+        
+    def makeVideos(self) -> None:
+        '''label-3d + label-combined\n
+        - raise: RuntimeError on subprocess failure
+        '''
+        cmd = [
+            'conda', 'activate', self.conda_env, '&&',
+            'P:', '&&',
+            'cd', str(self.ani_root_path), '&&',
+            'anipose', 'label-3d', '&&',
+            'anipose', 'label-combined'
+        ]
+        result = subprocess.run(cmd, shell=True, check=True)
+        if result.stderr:
+            logger.error(result.stderr)
+            raise RuntimeError(f'makeVideos failed: {result.stderr}')
+
+    def copy_vid_to_daet(self, daet:DAET) -> None:
+        '''copy raw videos to anipose folder for this daet'''
+        daet_sync_root = self.note.getDaetSyncRoot(daet)
+        daet_ani_videos_raw = self.ani_root_path / str(daet) / 'videos-raw'
+        daet_ani_videos_raw.mkdir(exist_ok=True, parents=True)
+        for vid in daet_sync_root.rglob('*.mp4'):
+            logger.info(f'Copying {vid.name}')
+            if not (daet_ani_videos_raw / vid.name).exists():
+                try:
+                    shutil.copy(vid, daet_ani_videos_raw)
+                except OSError as e:
+                    logger.error(f'ssc copy failed {e}')
+    
+    def copy_videos_all_daets(self) -> None:
+        for daet in self.note.daets:
+            self.copy_vid_to_daet(daet)
 
     def pee(self, daet_root: Path) -> None:
         # write this analysis' info

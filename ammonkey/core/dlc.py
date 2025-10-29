@@ -9,12 +9,15 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from datetime import datetime
 from hashlib import md5
+from collections.abc import Callable
+from functools import partial
 
 from .expNote import ExpNote, Task
 from .camConfig import CamGroup
 from .daet import DAET
 from .dlcCollector import mergeDlcOutput, getDLCMergedFolderName
 from ..utils.log import Wood
+from .config import Config
 
 logger = logging.getLogger(__name__)
 ready: bool = False
@@ -320,78 +323,57 @@ class DLCProcessor:
         '''so that multiple models can live together'''
         pass # implemented in DLCModel.pee()
     
-# util func
-def createProcessor_TS(note: ExpNote) -> DLCProcessor:
-    """convenience function to create DLC processor with standard L/R setup"""
-    model_dict = {
-        CamGroup.LEFT: modelPreset('TS-L'),
-        CamGroup.RIGHT: modelPreset('TS-R'),
-    }
-    
-    return DLCProcessor(note, model_dict)
+# util funcs
+def create_processor(wiring: dict[CamGroup, DLCModel]) -> Callable[[ExpNote], DLCProcessor]:
+    return partial(DLCProcessor, model_dict=wiring)
 
-def createProcessor_Pull(note: ExpNote) -> DLCProcessor:
-    """convenience function to create DLC processor with standard L/R setup"""
-    model_dict = {
-        CamGroup.LEFT: modelPreset('Pull-L'),
-        CamGroup.RIGHT: modelPreset('Pull-R'),
-    }
-    
-    return DLCProcessor(note, model_dict)
+def deserialize_wiring(wiring: dict[str,str]) -> dict[CamGroup, DLCModel]:
+    return {CamGroup(k): modelPreset(v) 
+            for k, v in wiring.items()}
 
-def createProcessor_BBT(note: ExpNote) -> DLCProcessor:
-    """convenience function to create DLC processor with standard L/R setup"""
-    model_dict = {
-        CamGroup.RIGHT: modelPreset('BBT'),
-    }
-    
-    return DLCProcessor(note, model_dict)
-
-def createProcessor_Brkm(note: ExpNote) -> DLCProcessor:
-    """convenience function to create DLC processor with standard L/R setup"""
-    model_dict = {
-        CamGroup.RIGHT: modelPreset('Brkm'),
-    }
-    
-    return DLCProcessor(note, model_dict)
-
-def modelPreset(preset:str) -> DLCModel:
-    if preset == 'TS-L':
-        return DLCModel('TS-LJan30', Path(r"D:\DeepLabCut\TS-L-shaved-N\config.yaml"), iteration=0, shuffle=4, short='TS-L')
-    if preset == 'TS-R':
-        return DLCModel('TS-RJan30', Path(r"D:\DeepLabCut\TS-R-shaved-N\config.yaml"), iteration=0, shuffle=3, short='TS-R')
-    if preset == 'Pull-L':
-        return DLCModel('TS-LJan30', Path(r"D:\DeepLabCut\TS-L-shaved-N\config.yaml"), iteration=0, shuffle=7, short='Pull-L')
-    if preset == 'Pull-R':
-        return DLCModel('TS-RJan30', Path(r"D:\DeepLabCut\TS-R-shaved-N\config.yaml"), iteration=0, shuffle=7, short='Pull-R')
-    if preset == 'Brkm':
-        return DLCModel('PiciMar6', Path(r"D:\DeepLabCut\Brkm\config.yaml"), iteration=2, shuffle=1, short='Brkm')
-    if preset == 'BBT':
-        return DLCModel('piciMar19', Path(r"D:\DeepLabCut\BBT\config.yaml"), iteration=3, shuffle=1, short='BBT')
-    #if preset == 'Pull-Hand':
-    #    return DLCModel('TS-RJan30', Path(r"D:\DeepLabCut\TS-R-shaved-N\config.yaml"), iteration=0, shuffle=7, short='Pull-Hand')
-    raise ValueError(f'Unknown preset {preset}')
+def modelPreset(preset_name:str) -> DLCModel:
+    mdl_param = Config.dlc_models.get(preset_name, None)
+    if mdl_param:
+        return DLCModel(
+            name=mdl_param.get('dir-name', ''),
+            cfg_path=Path(mdl_param.get('cfg-path', '')),
+            iteration=mdl_param.get('iteration', 0),
+            shuffle=mdl_param.get('shuffle', 1),
+        )
+    raise ValueError(f'Unknown preset {preset_name}')
 
 #TODO below should be wrapped in another dataclass.
 
-available_models = [
-    'TS-L', 'TS-R', 'Pull-L', 'Pull-R', 'Brkm', 'BBT'
-]
-
-available_dp = [
-    'TS-LR', 'Pull-LR', 'Brkm', 'BBT'
-]
+available_models = [k for k in Config.dlc_models.keys()]
+available_dp = [k for k in Config.dlc_combos.keys()]
 
 dp_task = {
-    'TS-LR':    Task.TS,
-    'Pull-LR':  Task.PULL,
-    'Brkm':     Task.BRKM,
-    'BBT':      Task.BBT,
+    'TS-LR':     Task.TS,
+    'Pull-LR':   Task.PULL,
+    'Brkm':      Task.BRKM,
+    'BBT':       Task.BBT,
+    'Pull-Hand': Task.PULL,
+    'fus-arm':   Task.PULL,
+    'fus-arm-it3':   Task.PULL,
+    'fus-arm-it7':   Task.PULL,
 }
 
 dp_factory = {
-    'TS-LR':    createProcessor_TS,
-    'Pull-LR':  createProcessor_Pull,
-    'Brkm':     createProcessor_Brkm,
-    'BBT':      createProcessor_BBT,
+    k: create_processor(deserialize_wiring(w))
+    for k, w in Config.dlc_combos.items()
 }
+
+@dataclass
+class ModelFactory:
+    models: list[DLCModel]
+    factory: list[Callable]
+
+    def __post_init__(self):
+        self._avail_models: list[str] = [
+            m.name for m in self.models
+        ]
+
+model_factory = ModelFactory(
+    models=[modelPreset(am) for am in available_models],
+    factory=[v for v in dp_factory.values()]
+)

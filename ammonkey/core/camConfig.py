@@ -8,6 +8,7 @@ from pathlib import Path
 import logging
 
 from ..utils import ROIConfig as ROI
+from ..core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +16,29 @@ class CamGroup(Enum):
     '''cam grouping. value will be used to index subfolders!'''
     LEFT = 'L'
     RIGHT = 'R'
+    UNDEFINED = 'NA'
+
+    @classmethod
+    def from_char(cls, char: str) -> 'CamGroup':
+        for group in cls:
+            if group.value == char:
+                return group
+        raise ValueError(f"Invalid camera group character: {char}")
 
 class LedColor(Enum):
     YELLOW = 'Y'
     GREEN  = 'G'
     # below are reserved, just
     RED    = 'R'
+    BLUE   = 'B'
     WHITE  = 'W'
     NONE   = None
 
     @classmethod
     def from_char(cls, char: str) -> 'LedColor':
-        for color in cls:
+        if char is None or char == '':
+            return cls.NONE
+        for color in cls:   
             if color.value == char:
                 return color
         raise ValueError(f"Invalid LED color character: {char}")
@@ -44,27 +56,37 @@ class Camera:
 @dataclass
 class CamConfig:
     """Flexible camera configuration for different setups"""
-    # camera grouping
+    #TODO move these values to amm-config.yaml
+    # camera grouping, note this starts from 1 not 0
     groups: dict[int, CamGroup] = field(default_factory=lambda: {
-        1: CamGroup.LEFT, 2: CamGroup.LEFT,
-        3: CamGroup.RIGHT, 4: CamGroup.RIGHT
+        ind: CamGroup.from_char(cam.get('group', 'NA'))
+        for ind, cam in Config.cam_settings.items()
     })
-    
-    # sync detection settings
-    rois: dict[int, list[int]] = field(default_factory=lambda: {
-        1: [496, 55, 249, 223], 2: [211, 8, 149, 119],
-        3: [864, 254, 131, 158], 4: [1007, 285, 171, 143],
+
+    # sync detection settings in X, Y, W, H
+    rois: dict[int, tuple[int]] = field(default_factory=lambda: {
+        ind: tuple(cam.get('roi', [0, 0, 1920, 1080]))
+        for ind, cam in Config.cam_settings.items()
     })
     
     led_colors: dict[int, str] = field(default_factory=lambda: {
-        1: "Y", 2: "G", 3: "G", 4: "G"
+        ind: cam.get('led_color', '')
+        for ind, cam in Config.cam_settings.items()
+    })
+
+    headers_in_note: dict[int, str] = field(default_factory=lambda: {
+        ind: cam.get('header_in_note', '_N/A_')
+        for ind, cam in Config.cam_settings.items()
     })
 
     # processing settings
-    num_cameras: int = 4
     enabled_cameras: list[bool] = field(default_factory=lambda: [True] * 4)
 
     def __post_init__(self):
+        # reject if dict keys doesn't match each other
+        if not (self.groups.keys() == self.rois.keys() == self.led_colors.keys()):
+            raise ValueError("CamConfig dict keys mismatch among groups, rois, led_colors")
+
         self.cams_dict: dict[int, Camera] = {
             ind: Camera(
                 name=f'cam{ind}',
@@ -81,6 +103,15 @@ class CamConfig:
     @property
     def cams(self) -> list[Camera]:
         return list(self.cams_dict.values())
+    
+    @property
+    def num_cams(self) -> int:
+        return len(self.cams_dict.values())
+    
+    @property
+    def evolved_groups(self) -> set[CamGroup]:
+        """get set of camera groups used in config"""
+        return set(self.groups.values())
     
     def getGroupCameras(self, group: CamGroup) -> list[int]:
         """get camera indices for given group"""
@@ -105,18 +136,23 @@ class CamConfig:
         
         return len([g for g, count in groups_with_cams.items() if count >= 2]) >= 1
 
-    def batchSelectROIs(self, vid_set:list[Path]):
-        frame = 500
-        if sum([1 for v in vid_set if v is not None and v.exists()]) != self.num_cameras:
-            logger.error("Video set doesn't match cam num")
-            return
+    def batchSelectROIs(self, vid_set:list[Path|None], frame_to_use:int=500) -> None:
+        '''main function when setting ROI for sync'''
+        
         for i, v in enumerate(vid_set):
             if v is None or not v.exists():
                 logger.error(f'batchSelectROIs: invalid video - {v}')
                 continue
-            roi = ROI.draw_roi(str(v), frame)
-            if ROI is None:
+            roi = ROI.draw_roi(str(v), frame_to_use)
+            if roi is None:
                 logger.warning('[warning] ROI not updated')
-            self.rois[i+1] = roi
-            
-        
+            else:
+                #FIXME here should refer to [vid order - cam idx mapping] from config above
+                # instead of directly i+1
+                self.rois[i+1] = tuple(roi)
+
+if __name__ == '__main__':
+    cam_cfg = CamConfig()
+    print(f'Number of cameras: {cam_cfg.num_cams}')
+    for cam in cam_cfg.cams:
+        print(cam)

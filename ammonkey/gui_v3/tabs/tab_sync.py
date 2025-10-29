@@ -86,6 +86,7 @@ class TabSync:
         self.lg.info('Updated ROIs')
 
     def on_sync_all(self, e: ft.ControlEvent):
+
         self.lg.debug('on_sync_all')
         self.lg.info('Starting sync all...')
         self.syncing_row.visible = True
@@ -94,7 +95,21 @@ class TabSync:
         self.btn_sync_all.disabled = True
         self.tab.update()
 
-        result = self.vs.syncAll()
+        if lf.USE_DASK:
+            from ...dask.dask_scheduler import DaskScheduler
+            from ammonkey.dask.dask_factory import create_sync_pipeline
+            sched = lf.scheduler
+            if not sched:
+                self.lg.error('dask not connected')
+                return
+            tasks = create_sync_pipeline(
+                note=self.vs.notes,
+                rois=self.vs.cam_config.rois,
+            )
+            futs = sched.submit_tasks(tasks)
+            result = sched.monitor_progress(futs)
+        else:
+            result = self.vs.syncAll()
 
         self.lg.debug(result)
         self.lg.info('Received sync result.')

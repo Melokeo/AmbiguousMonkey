@@ -34,6 +34,12 @@ class TabAnipose:
             on_click=self.on_run_anipose_click
         )
 
+        self.btn_make_vid = ft.ElevatedButton(
+            text='Make videos',
+            icon=ft.Icons.VIDEOCAM,
+            on_click=self.on_make_vid_click,
+        )
+
         self.btn_collect = ft.ElevatedButton(
             text='Collect',
             on_click=self.on_collect_click,
@@ -66,6 +72,12 @@ class TabAnipose:
                 ft.Row(
                     [
                         self.btn_run_ani,
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+                ft.Row(
+                    [
+                        self.btn_make_vid,
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                 ),
@@ -117,6 +129,8 @@ class TabAnipose:
             self.lg.debug('-Trangulate CLI-')
             self.ap.triangulateCLI()
             self.lg.info('Anipose terminated. Let\'s pray it\'s done.')
+
+            # self.ap.makeVideos()
         finally:
             self.running_row.visible = False
             self.btn_run_ani.disabled= False
@@ -129,7 +143,7 @@ class TabAnipose:
         self.model_dropdown.options = [ft.dropdown.Option(d) for d in udd]
         if udd:
             self.model_dropdown.value = udd[0]
-        self.lg.debug(f'{e=}, {e.control=}, {self.tab=} ,{self.tab.parent=}, {self.tab.page=}')
+        # self.lg.debug(f'{e=}, {e.control=}, {self.tab=} ,{self.tab.parent=}, {self.tab.page=}')
         self.tab.update()
 
         if not ('* Nothing *' in udd and len(udd)==1):
@@ -143,6 +157,26 @@ class TabAnipose:
             self.lg.error('Anipose Processor is None!')
             return
         violentCollect(self.ap.ani_root_path, lf.note_filtered.data_path / 'clean')
+
+    def on_make_vid_click(self, e: ft.ControlEvent):
+        self.lg.debug(f'on_make_vid_click')
+        self.running_row.visible = True
+        self.btn_run_ani.disabled = True
+        self.tab.update()
+
+        if self.ap is None:
+            self.lg.error('Anipose Processor is None!')
+            return
+        try:
+            self.ap.makeVideos()
+        except RuntimeError as re:
+            self.lg.error(f'Anipose make videos failed: {re}')
+        else:
+            self.lg.info('Make videos done')
+
+        self.running_row.visible = False
+        self.btn_run_ani.disabled= False
+        self.tab.update()
 
     def on_msn_change(self, e: ft.ControlEvent):
         #if e.control.value != '* Nothing *' and e.control.value:

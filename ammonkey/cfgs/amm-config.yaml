@@ -1,0 +1,147 @@
+# ammonkey configs. modify when there is new experiment, new model, or new animals
+
+projects-path: P:\projects\monkeys\Chronic_VLL
+
+animals:
+  pici: P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025
+  fusillo: P:\projects\monkeys\Chronic_VLL\DATA_RAW\Fusillo\2025
+
+cams:
+  1:  # index matters!!
+    name: cam1 # whatever name, it won't be used in code after all
+    index: 1
+    group: L
+    led_color: Y
+    roi: [496, 55, 249, 223]
+    header_in_note: "Camera files \n(1 LR)"
+  2:
+    name: cam2
+    index: 2
+    group: L
+    led_color: G
+    roi: [211, 8, 149, 119]
+    header_in_note: "Camera files \n(2 LL)"
+  3:
+    name: cam3
+    index: 3
+    group: R
+    led_color: G
+    roi: [864, 254, 131, 158]
+    header_in_note: "Camera files (3 RR)"
+  4:
+    name: cam4
+    index: 4
+    group: R
+    led_color: G
+    roi: [1007, 285, 171, 143]
+    header_in_note: "Camera files (4 RL)"
+
+dlc-models:
+  # pici
+  TS-L:
+    dir-name: TS-LJan30
+    cfg-path: D:\DeepLabCut\TS-L-shaved-N\config.yaml
+    iteration: 0
+    shuffle: 4
+  TS-R:
+    dir-name: TS-RJan30
+    cfg-path: D:\DeepLabCut\TS-R-shaved-N\config.yaml
+    iteration: 0
+    shuffle: 7
+  Pull-L:
+    dir-name: TS-LJan30
+    cfg-path: D:\DeepLabCut\TS-L-shaved-N\config.yaml
+    iteration: 0
+    shuffle: 7
+  Pull-R:
+    dir-name: TS-RJan30
+    cfg-path: D:\DeepLabCut\TS-R-shaved-N\config.yaml
+    iteration: 0
+    shuffle: 3
+  Pull-Hand:
+    dir-name: PiciMar24
+    cfg-path: D:\DeepLabCut\Pull-Hand\config.yaml
+    iteration: 4
+    shuffle: 3
+  Brkm:
+    dir-name: PiciMar6
+    cfg-path: D:\DeepLabCut\Brkm\config.yaml
+    iteration: 2
+    shuffle: 1
+  BBT:
+    dir-name: piciMar19
+    cfg-path: D:\DeepLabCut\BBT\config.yaml
+    iteration: 3
+    shuffle: 1
+  
+  # fusillo
+  fus-arm-L:
+    dir-name: fus-armSep2
+    cfg-path: D:\DeepLabCut\FUSILLO\fus-arm-L\config.yaml
+    iteration: 0
+    shuffle: 3
+  fus-arm-R:
+    dir-name: fus-arm-RSep3
+    cfg-path: D:\DeepLabCut\FUSILLO\fus-arm-R\config.yaml
+    iteration: 0
+    shuffle: 3
+  fus-arm-L7:
+    dir-name: fus-armSep2
+    cfg-path: D:\DeepLabCut\FUSILLO\fus-arm-L\config.yaml
+    iteration: 0
+    shuffle: 7
+  fus-arm-R7:
+    dir-name: fus-arm-RSep3
+    cfg-path: D:\DeepLabCut\FUSILLO\fus-arm-R\config.yaml
+    iteration: 0
+    shuffle: 7
+
+# combination of models during analysis
+# keys: CamGroup enum values; values: keys of dlc-models as above.
+dlc-process-combos:
+  TS-LR:
+    L: TS-L
+    R: TS-R
+  Pull-LR:
+    L: Pull-L
+    R: Pull-R
+  Pull-Hand:
+    R: Pull-Hand
+  Brkm:
+    R: Brkm
+  BBT:
+    R: BBT
+  fus-arm-it3:
+    L: fus-arm-L
+    R: fus-arm-R
+  fus-arm-it7:
+    L: fus-arm-L7
+    R: fus-arm-R7
+
+# keyword-based assignment of anipose config files, order sensitive!
+anipose-cfgs:
+  fus-arm: config_arm.toml
+  Brkm: config_hand.toml
+  BBT: config_hand.toml
+  Hand: config_hand.toml
+  TS: config_arm.toml
+  Pull: config_arm.toml
+
+# will be loaded to global Task enum
+# !! Below doesn't work, because i need static enum definition for pylance.
+# if you want to modify, go to ammonkey/core/daet.py and make changes there.
+# tasks:
+#   ALL: 1
+#   TS: 2
+#   BBT: 3
+#   BRKM: 4
+#   PULL: 5
+#   CALIB: 6
+# 
+# task-keywords:
+#   BBT: ["bbt"]
+#   BRKM: ["brkm", "brnk", "kman"]
+#   PULL: ["pull", "puul"]
+#   TS: ["touchscreen", "touch screen", "ts"]
+#   CALIB: ["calib"]
+#   ALL: ['']

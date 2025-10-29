@@ -10,10 +10,14 @@ from typing import Iterator
 import os, glob
 
 from .fileOp import getDataPath
-from .daet import DAET, Task
+from .daet import DAET, Task, task_match
 from ..utils.statusChecker import chk_dict
+from .config import Config
+from .camConfig import CamConfig
 
 logger = logging.getLogger(__name__)
+
+ANIMALS: list[str] = ['pici', 'fusillo']
 
 @dataclass
 class ExpNote:
@@ -22,23 +26,19 @@ class ExpNote:
     """
     path: Path
     header_key: str = 'Experiment'
-    cam_headers: list[str] = field(default_factory=lambda: [
-        'Camera files \n(1 LR)', 'Camera files \n(2 LL)', 
-        'Camera files (3 RR)', 'Camera files (4 RL)'
-    ])
     skip_markers: list[str] = field(default_factory=lambda: ['x', '-', 'NaN'])
     video_extension: str = 'mp4'
+    cam_config: CamConfig = None #type: ignore
     
     # computed fields
     df: pd.DataFrame = field(init=False)
     animal: str = field(init=False)
     date: str = field(init=False)
     data_path: Path = field(init=False)
-    _task_patterns: dict[Task, list[str]] = field(init=False, default_factory=lambda: {
-        Task.BBT: ['bbt'], Task.BRKM: ['brkm', 'brnk', 'kman'],
-        Task.PULL: ['pull', 'puul'], Task.TS: ['touchscreen', 'touch screen', 'ts'],
-        Task.CALIB: ['calib'], Task.ALL: ['']
-    })  # shouldnt use this
+    _task_patterns: dict[Task, list[str]] = field(
+        init=False, 
+        default_factory= lambda: task_match,
+    ) 
 
     def __post_init__(self):
         self.path = Path(self.path)
@@ -51,6 +51,11 @@ class ExpNote:
         if not xlsx_path.exists():
             raise FileNotFoundError(f'Notes file not found: {xlsx_path}')
         
+        self.cam_config = self.cam_config or CamConfig()
+        self.cam_headers: list[str] = list(self.cam_config.headers_in_note.values())
+        if '_N/A_' in self.cam_headers:
+            logger.warning(f'One or more camera headers are empty in config, video reading may fail.')
+
         self.df = self._loadDataFrame(xlsx_path)   
 
         self.data_path = getDataPath(self.path) 
@@ -95,11 +100,10 @@ class ExpNote:
         """extract animal and date from path structure""" # fragile
         parts = self.path.parts
         # flexible: try common patterns
-        if len(parts) >= 4 and parts[-4].lower() in ['pici']: 
+        if len(parts) >= 4 and parts[-4].lower() in ANIMALS: 
             return parts[-4], parts[-1]
         elif len(parts) >= 2:  # fallback - look for known animals
-            animals = ['pici']
-            animal = next((p for p in parts if p.lower() in animals), parts[-2])
+            animal = next((p for p in parts if p.lower() in ANIMALS), parts[-2])
             return animal, parts[-1]
         else:
             raise ValueError(f'Too less parts in path {self.path}')
@@ -184,8 +188,19 @@ class ExpNote:
     def getDaetSyncRoot(self, daet: DAET) -> Path:
         return self.sync_path / str(daet)
     
+    def getDaetSyncVidDirs(self, daet: DAET) -> list[Path]:
+        sync_root = self.getDaetSyncRoot(daet)
+        vid_dirs = [sync_root / g.value for g in self.cam_config.evolved_groups]
+        return vid_dirs
+    
     def getDaetDlcRoot(self, daet: DAET) -> Path:
         return self.getDaetSyncRoot(daet) / 'DLC'
+    
+    def getAniRoot(self) -> Path:
+        return self.data_path / 'anipose'
+
+    def getCleanDir(self) -> Path:
+        return self.data_path / 'clean'
 
     def getVidSetIdx(self, daet: DAET|None = None, no: int|None = None) -> list[int|None]:
         """
@@ -308,7 +323,7 @@ class ExpNote:
         new_note = ExpNote(
             path=self.path,
             header_key=self.header_key,
-            cam_headers=self.cam_headers.copy(),
+            cam_config=self.cam_config,
             skip_markers=self.skip_markers.copy(),
             video_extension=self.video_extension
         )
@@ -328,7 +343,7 @@ class ExpNote:
         new_note = ExpNote(
             path=self.path,
             header_key=self.header_key,
-            cam_headers=self.cam_headers.copy(),
+            cam_config=self.cam_config,
             skip_markers=self.skip_markers.copy(),
             video_extension=self.video_extension
         )
@@ -374,7 +389,7 @@ class ExpNote:
                 for i, idx in enumerate(group.index, start=1):
                     new_task = f"{str(task).strip()} ({i})"
                     self.df.at[idx, 'Task'] = new_task
-                    self.df.at[idx, 'daet'] = DAET(self.date, self.animal, exp.strip(), new_task)
+                    self.df.at[idx, 'daet'] = DAET(self.date, self.animal, exp.strip(), new_task) #type: ignore
 
         self._daets.clear()
         self._buildDaetIdx()
@@ -439,7 +454,7 @@ class ExpNote:
         return f'ExperimentNotes({self.animal} {self.date} with {len(self.df)} entries)'
 
 
-def iter_notes(year_path: Path) -> Iterator[ExpNote]:
+r"""def iter_notes(year_path: Path) -> Iterator[ExpNote]:
     re_date = re.compile(r'20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])')
     for folder_mo in sorted(year_path.iterdir()):
         if not folder_mo.is_dir():
@@ -455,7 +470,35 @@ def iter_notes(year_path: Path) -> Iterator[ExpNote]:
                     logger.error(f'Loading xlsx failed {folder_date.name}')
                 break
             else:
-                logger.warning(f'No note found under {folder_date.name}')
+                logger.warning(f'No note found under {folder_date.name}')"""
+
+def iter_notes(year_path: str | Path) -> Iterator[ExpNote]:
+    '''assumes /path/to/project/<animal-name>/<yyyy>'''
+    year_path = Path(year_path)
+    animal_name = year_path.parent.name
+    # if not : return
+
+    year_path = str(year_path)
+    re_date = re.compile(r'20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])')
+    for mo_name in sorted(os.listdir(year_path)):
+        folder_mo = os.path.join(year_path, mo_name)
+        if not os.path.isdir(folder_mo):
+            continue
+        for date_name in sorted(os.listdir(folder_mo)):
+            folder_date = os.path.join(folder_mo, date_name)
+            if not re_date.search(date_name):
+                logger.info(f'skipped {date_name} cuz not date')
+                continue
+            pattern = os.path.join(folder_date, f'{animal_name}_????????.xlsx')
+            matches = glob.glob(pattern)
+            if matches:
+                note_file = matches[0]
+                try:
+                    yield ExpNote(Path(os.path.dirname(note_file)))
+                except RuntimeError:
+                    logger.error(f'Loading xlsx failed {date_name}')
+            else:
+                logger.warning(f'No note found under {date_name}')
 
 def iter_xlsx(root_dir: str, nesting_level: int = 2) -> Iterator[str]:
     """

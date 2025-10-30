@@ -36,6 +36,18 @@ cams:
     roi: [1007, 285, 171, 143]
     header_in_note: "Camera files (4 RL)"
 
+ffmpeg: 'C:\ffmpeg\bin\ffmpeg.exe'    # or simply "ffmpeg" if installed in conda
+ffprobe: 'C:\ffmpeg\bin\ffprobe.exe'
+sync-aud:
+  snr-threshold: 3.2
+  peak-threshold: 1.16
+  unsure-peak-threshold: 1.6
+sync-led:
+  check-farthest: 4000
+  led-persist-sec: 0.033
+  led-persist-tolerance-sec: 0
+  led-duration-range: [1.0, 1.0]
+
 dlc-models:
   # pici
   TS-L:
@@ -117,6 +129,8 @@ dlc-process-combos:
   fus-arm-it7:
     L: fus-arm-L7
     R: fus-arm-R7
+
+anipose-conda-env: anipose-3d
 
 # keyword-based assignment of anipose config files, order sensitive!
 anipose-cfgs:

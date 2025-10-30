@@ -16,7 +16,7 @@ from .camConfig import CamConfig
 
 logger = logging.getLogger(__name__)
 
-ANIMALS: list[str] = ['pici', 'fusillo']
+ANIMALS = Config.animals
 
 @dataclass
 class ExpNote:
@@ -24,11 +24,12 @@ class ExpNote:
     Load and manage experiment notes from Excel with DAET-based interface.
     """
     path: Path
-    header_key: str = 'Experiment'
+    header_key: str = 'Experiment'  # used when searching header line in note file
     skip_markers: list[str] = field(default_factory=lambda: ['x', '-', 'NaN'])
     video_extension: str = 'mp4'
     cam_config: CamConfig = None #type: ignore
-    
+    #TODO move these to a separate note adaptor
+
     # computed fields
     df: pd.DataFrame = field(init=False)
     animal: str = field(init=False)

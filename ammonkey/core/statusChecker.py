@@ -152,7 +152,7 @@ class StatusChecker:
             return {}
         model_sets = [
             p.name for p in ani_root.glob('*') 
-            if p.is_dir() and p.name[-4:].isnumeric()
+            if p.is_dir() and p.name[-4:].isnumeric()   #TODO implement better MS matching logic
         ]
         ms_dict = {}
         for ms in model_sets:

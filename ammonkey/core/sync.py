@@ -18,6 +18,7 @@ from .expNote import ExpNote, Task
 from .camConfig import CamConfig
 from .fileOp import dataSetup
 from .daet import DAET
+from .config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,9 @@ class VidSynchronizer:
         self.cam_config = cam_cfg or CamConfig()
         self.config = sync_cfg or SyncConfig()
         self.wood = Wood(notes.data_path) 
+        SyncAud.ffmpeg_path = Config.ffmpeg_path
+        SyncLED.ffmpeg_path = Config.ffmpeg_path
+        SyncLED.ffprobe_path = Config.ffprobe_path
 
     def setROI(self, daet_to_check:DAET|None=None, frame:int=500, cam=None):
         if daet_to_check is None:

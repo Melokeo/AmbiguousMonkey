@@ -64,7 +64,7 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'release'
     environment:
       name: amm
     permissions:

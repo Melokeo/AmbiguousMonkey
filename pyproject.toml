@@ -85,5 +85,10 @@ include = ["ammonkey*"]
 # Exclude folders that are not part of the package
 exclude = ["tests*", "scripts*"]
 
-
-
+[tool.setuptools.package-data]
+ammonkey = [
+    "**/*.yaml",
+    "**/*.yml", 
+    "**/*.ico",
+    "**/*.toml",
+]

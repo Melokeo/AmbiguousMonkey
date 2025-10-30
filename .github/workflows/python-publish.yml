@@ -57,3 +57,22 @@ jobs:
         with:
           name: python-package
           path: dist/*
+          
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.ref == 'refs/heads/main'
+    environment:
+      name: amm
+    permissions:
+      id-token: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist
+      
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

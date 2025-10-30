@@ -34,7 +34,7 @@ dependencies = [
     "matplotlib",
     "diskcache",
     "tqdm",
-    "yaml",
+    "pyyaml",
     "librosa",
     "openpyxl",
     # conditional dependency for Windows-specific features
@@ -84,4 +84,5 @@ where = ["."]
 include = ["ammonkey*"]
 # Exclude folders that are not part of the package
 exclude = ["tests*", "scripts*"]
+
 

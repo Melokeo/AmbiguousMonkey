@@ -48,7 +48,7 @@ Homepage = "https://github.com/melokeo/AmbiguousMonkey"
 Documentation = "https://github.com/Melokeo/AmbiguousMonkey/blob/main/README.md"
 
 [project.scripts]
-ammonkey = "ammonkey.gui_v3.flet_main:main"
+ammonkey = "ammonkey.__main__:main"
 
 # Optional dependencies for different features
 [project.optional-dependencies]
@@ -84,5 +84,6 @@ where = ["."]
 include = ["ammonkey*"]
 # Exclude folders that are not part of the package
 exclude = ["tests*", "scripts*"]
+
 
 

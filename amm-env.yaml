@@ -1,25 +1,28 @@
 name: amm
 channels:
-  - conda-forge
+  - defaults
   - nvidia
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+  - https://repo.anaconda.com/pkgs/msys2
 dependencies:
-  - python=3.10
-  - pip
-  - numpy==1.26.4
-  - pandas
-  - matplotlib
-  - scipy
-  - opencv
-  - librosa
-  - pathlib
-  - tqdm
-  - openpyxl
   - cudatoolkit=11.2
   - cudnn=8.1.0
   - diskcache
   - ffmpeg
+  - librosa
+  - matplotlib
+  - numpy==1.26.4
+  - openpyxl
+  - pandas
+  - pathlib
+  - pip
+  - python=3.10
+  - scipy
+  - tqdm
+  - dask
+  - distributed
   - mayavi
-  
   - pip:
     - tensorflow==2.10.*
     - deeplabcut==3.0.0rc7
@@ -39,4 +42,5 @@ dependencies:
     # below for anipose
     - configobj
     
+
 

@@ -46,7 +46,7 @@ Contributed by: deepseek-r1, chatgpt-4o, Mel
 Feb 2025
 '''
 
-import sys, os, re, ast
+import sys, os, re, ast 
 import platform, subprocess
 from PyQt6.QtCore import (
     Qt, QUrl, QTime, QTimer, QEvent, QRectF, QPointF,

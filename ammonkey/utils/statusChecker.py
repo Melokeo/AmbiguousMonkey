@@ -6,7 +6,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
 import re
-from tqdm import tqdm
+
 from .. import monkeyUnityv1_8 as mky
 from .pullAniAll import getAllDates, convertRawToData, getCSVPathUnder
 from .silence import silence
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class checkpoint:
+    '''Checkpoint for tracking file processing status'''
     name: str
     subdir: list[str] = field(default_factory=lambda: [''])
     condition: list[str] = field(default_factory=list)
@@ -31,10 +32,24 @@ class checkpoint:
             raise ValueError('checkpoint must have a condition')
     
     def check(self, data_path: Path | str, daet: DAET) -> tuple[bool]:
-        if isinstance(data_path, str): data_path = Path(data_path)
+        '''
+        main checking function
+
+        usage: chk.check(data_path:Path|str, daet:DAET) -> tuple[bool]
+        1. construct working directory with given path, daet and subdir
+        2. check for each "condition" regex if **any** file in each dir matches
+        3. return tuple of bools for each condition
+        
+        Raises FileNotFoundError if working directory does not exist
+
+        Interpretation of the result tuple:
+        use interpret dict to map the result to readable status,
+        '''
+        if isinstance(data_path, str): 
+            data_path = Path(data_path)
         subdir = subph(self.subdir, daet)
         cond = subph(self.condition, daet, escape=True)
-        logger.debug(f'{subdir=}, {cond=}')
+        # logger.debug(f'{subdir=}, {cond=}')
 
         workdir = data_path.joinpath(*subdir)
         if not workdir.exists(): # raise FileNotFoundError(workdir)
@@ -207,20 +222,38 @@ def checkDaetValidity() -> bool:
     return True
 
 def checkOnDate(praw:Path|str, pdat:Path|str|None=None) -> None:
+    '''
+    Checks the completeness of data processing for a single date.
+
+    Args:
+        praw (Path or str): Path to the raw data directory. Should be a valid directory path containing raw data for a specific date.
+        pdat (Path or str or None, optional): Path to the processed data directory. If None, it is inferred by replacing 'DATA_RAW' with 'DATA' in `praw`.
+
+    Prints:
+        For each DAET (date-animal-experiment-task) found, prints the status of each checkpoint for that date.
+        The output includes the name of the processed data directory, each DAET, and the status of each checkpoint (e.g., 'OK', 'Missing', 'FNF', etc.).
+
+    Returns:
+        None
+    '''
     praw = Path(praw)
     if pdat is None:
         pdat = str(praw).replace('DATA_RAW', 'DATA')
     pdat = Path(pdat)
     print(f'\n===== {pdat.name} =====')
 
-    daets = mky.getTasksInDAET(PPATH_RAW=str(praw), task=mky.Task.All)
+    daets = mky.getTasksInDAET(PPATH_RAW=str(praw), task=mky.Task.All) #TODO with next fixme, use ExpNote method instead of mky.
     if daets:
         for d in daets:
             daet = DAET.fromString(d)   #FIXME vulnerable
             if daet.isCalib: continue
             print(f'--- {daet} ---')
-            if Path(pdat/'clean').exists:
-                if sum(chk_dict['clean'].check(pdat, daet)) == 1:
+            if Path(pdat/'clean').exists():
+                clean_check = chk_dict['clean'].check(pdat, daet)
+                if clean_check == (False,):
+                    print('Missing directory or file')
+                    continue
+                if sum(clean_check) == 1:
                     print('OK')
                     continue
             for chk in chk_dict.values():
@@ -230,17 +263,22 @@ def checkOnDate(praw:Path|str, pdat:Path|str|None=None) -> None:
                 except FileNotFoundError:
                     print('FNF')
                     continue
+
                 if chk.interpret:
-                    if stat in chk.interpret.keys():
-                        print(chk.interpret[stat])
-                    elif sum(stat) in chk.interpret.keys():
-                        print(chk.interpret[sum(stat)])
-                    else:
-                        print('Undefined status')
+                    print(interpret_status(stat, chk.interpret))
                 else:
                     print(stat)
     else: 
         print('No tasks')
+
+def interpret_status(stat, interp_dict):
+    if stat in interp_dict:
+        return interp_dict[stat]
+    elif isinstance(stat, tuple):
+        s = sum(stat)
+        if s in interp_dict:
+            return interp_dict[s]
+    return 'Undefined status'
 
 def main():
     raw_dir = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025'

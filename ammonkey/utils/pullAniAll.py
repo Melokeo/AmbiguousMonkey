@@ -108,7 +108,7 @@ def sortSummaryCSV(csv: Path):
     csv.write_text(h + '\n' + '\n'.join(rows), encoding='utf-8')
 
 if __name__ == '__main__':
-    summary_csv = Path(r"C:\Users\mkrig\Documents\Python Scripts\auto_anipose_rec.csv")
+    summary_csv = Path.home() / "Documents/Python Scripts/auto_anipose_rec.csv"
     summary_csv.parent.mkdir(parents=True, exist_ok=True)
     summary_csv.write_text('date,entry,status\n', encoding='utf-8')
     raws = getAllDates(raw_dir)

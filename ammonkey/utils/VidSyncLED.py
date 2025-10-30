@@ -15,8 +15,8 @@ show_plt = False
 ffmpeg_path = r'C:\ffmpeg\bin\ffmpeg.exe'
 ffprobe_path = r'C:\ffmpeg\bin\ffprobe.exe'
 # if below doesnt work try ffmpeg with path above
-ffmpeg_path = 'ffmpeg'
-ffprobe_path = 'ffprobe'
+#ffmpeg_path = 'ffmpeg'
+#ffprobe_path = 'ffprobe'
 
 if debug or show_plt:
     print(f'Alt: debug {debug}, show intensity plot {show_plt}')
@@ -33,20 +33,43 @@ def get_video_info(path):
         # print(nb_frames, frame_rate)
         raise RuntimeError(f"ffprobe failed: {e}")
     
-def find_start_frame(path, roi, threshold, LED, out_path='Detection Output'):
+def find_start_frame(path: str, roi: list[int]|tuple[int,...], threshold: int, LED: str, 
+                  out_path: str = 'Detection Output', 
+                  led_persist_sec: float = 0.033, 
+                  led_persist_tolerance: float = 0.0,
+                  led_duration_range: tuple[float, float] = (1.0, 1.0)) -> int:
     """
     params:
         path: video path
         roi: detection area [x, y, w, h]
         threshold: (0-255)
         LED: LED color ("Y" or "G")
+        led_persist_sec: requirement of led lit duration
+        led_persist_tolerance: noise level allowed in the lit duration. the lower the stricter.
     return:
         start_frame
     """
+    roi = tuple(roi)
     x, y, w, h = roi
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         raise ValueError(f"Video {path} cannot be opened.")
+    
+    # calculate required consecutive frames for persistence
+    _, fps = get_video_info(path)  # you'll need this info
+    required_frames = int(led_persist_sec * fps)
+    consecutive_count = 0
+    potential_start = None
+    tolerance_frames = int(required_frames * led_persist_tolerance)
+    min_frames = int(led_persist_sec * fps * led_duration_range[0])
+    max_frames = int(led_persist_sec * fps * led_duration_range[1])
+    # safety checks
+    if min_frames <= 0:
+        min_frames = 1
+    if max_frames <= min_frames:
+        max_frames = min_frames + 1
+    if tolerance_frames < 0:
+        tolerance_frames = 0
 
     hsv_ranges = {
         "Y": ([20, 100, 100], [30, 255, 255]),   
@@ -64,7 +87,7 @@ def find_start_frame(path, roi, threshold, LED, out_path='Detection Output'):
 
     furthest = 3000
 
-    frame_count = 0 # will add 1 when returning
+    frame_count = 0 # will add 1 when returning !!
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -79,16 +102,44 @@ def find_start_frame(path, roi, threshold, LED, out_path='Detection Output'):
         current_max = np.max(v_channel)
         max_values.append(current_max)
 
-        if current_max >= threshold and start_frame is None:
-            if frame_count == 0:
-                head = True
-            elif not head:
-                start_frame = frame_count
-                detection_frame = frame.copy()
-                cv2.rectangle(detection_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                break
-        elif current_max <= threshold and head:
-            head = False
+        # detection logic!
+        if current_max >= threshold:
+            if consecutive_count == 0:
+                potential_start = frame_count
+            consecutive_count += 1
+            
+            # check if we've reached minimum duration
+            if consecutive_count >= min_frames and start_frame is None:
+                # verify persistence within current window
+                window_size = min(consecutive_count, max_frames)
+                start_idx = frame_count - window_size + 1
+                frames_below = sum(1 for i in range(start_idx, frame_count + 1) 
+                                if max_values[i] < threshold)
+                
+                if frames_below <= int(window_size * led_persist_tolerance):
+                    if potential_start == 0:
+                        head = True
+                    elif not head:
+                        start_frame = potential_start
+                        detection_frame = frame.copy()
+                        cv2.rectangle(detection_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                        break
+        else:
+            # only reset if we haven't started counting or if we're beyond tolerance
+            if consecutive_count > 0:
+                # count how many frames in current window are below threshold
+                window_start = max(0, potential_start) if potential_start else 0
+                window_end = min(len(max_values), frame_count + 1)
+                current_frames_below = sum(1 for i in range(window_start, window_end) 
+                                        if max_values[i] < threshold)
+                
+                tolerance_check = min(tolerance_frames, int(consecutive_count * led_persist_tolerance))
+                if current_frames_below > tolerance_check:
+                    consecutive_count = 0
+                    potential_start = None
+            
+            if head:
+                head = False
 
         frame_count += 1
         if frame_count % 500 == 1:
@@ -124,6 +175,7 @@ def find_start_frame(path, roi, threshold, LED, out_path='Detection Output'):
         plt.ylabel("Brightness Value")
         plt.legend()
         plt.savefig(os.path.join(out_path,f'brightness_plot_{os.path.basename(path).split(".")[0]}_{start_frame+1}.jpg'))
+        plt.close()
 
     return start_frame+1 if start_frame is not None else -1
 

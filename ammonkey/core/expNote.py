@@ -11,7 +11,6 @@ import os, glob
 
 from .fileOp import getDataPath
 from .daet import DAET, Task, task_match
-from ..utils.statusChecker import chk_dict
 from .config import Config
 from .camConfig import CamConfig
 

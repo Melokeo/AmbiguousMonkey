@@ -9,7 +9,6 @@ import logging
 from pathlib import Path
 from .daet import DAET
 from .ani import AniposeProcessor
-from ..utils import statusChecker as sc
 from .expNote import ExpNote
 
 logger = logging.getLogger(__name__)

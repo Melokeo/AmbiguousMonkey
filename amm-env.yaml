@@ -18,19 +18,25 @@ dependencies:
   - cudnn=8.1.0
   - diskcache
   - ffmpeg
+  - mayavi
   
   - pip:
     - tensorflow==2.10.*
     - deeplabcut==3.0.0rc7
     - anipose
     - opencv-python==4.11.0.86
+    - flet
+    - dask
     # below are for deeplabcut gui
     - tensorpack
     - tf-slim
-    - qtpy
     - torch==2.0.1
     - torchvision==0.15.2
     - torchaudio==2.0.2
     - qdarkstyle
     - napari
     - napari_deeplabcut
+    # below for anipose
+    - configobj
+    
+

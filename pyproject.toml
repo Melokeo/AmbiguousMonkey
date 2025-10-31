@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ammonkey"
-version = "3.2.4"
+version = "3.2.6"
 authors = [
   { name="Mel Xu", email="penkonno@gmail.com" },
 ]
@@ -92,5 +92,6 @@ ammonkey = [
     "**/*.ico",
     "**/*.toml",
 ]
+
 
 

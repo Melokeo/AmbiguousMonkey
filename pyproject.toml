@@ -10,7 +10,7 @@ version = "3.2.4"
 authors = [
   { name="Mel Xu", email="penkonno@gmail.com" },
 ]
-description = "A package for processing and analyzing primate behavior videos using DeepLabCut, Anipose, and a custom GUI."
+description = "A package for organizing, processing and performing markerless 3D tracking on primate behavior videos using DeepLabCut, Anipose, with a user-friendly GUI."
 readme = "README.md"
 requires-python = "~=3.10"
 license = { text="MIT License" }
@@ -92,4 +92,5 @@ ammonkey = [
     "**/*.ico",
     "**/*.toml",
 ]
+
 

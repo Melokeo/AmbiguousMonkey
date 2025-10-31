@@ -102,7 +102,7 @@ class DAET:
     def fromString(cls, daet_str: str) -> 'DAET':
         """
         create DAET from string like '20250403-Pici-TS-1'. Delimiter is '-'.
-        Only takes 1,2,-1 delimiters
+        Only takes #1, #2 and last delimiters
         """
         p = daet_str.split('-')
         parts: list[str] = ['']*4
@@ -128,6 +128,15 @@ class DAET:
         if animal.lower() == 'pici':
             s = str(task)       # this is historical problem.
         return cls(date, animal, str(row['Experiment']).strip(), s.strip())
+    
+    @classmethod
+    def isDaet(cls, s: str) -> bool:
+        """check if string is in DAET format"""
+        try:
+            _ = cls.fromString(s)
+            return True
+        except ValueError:
+            return False
     
     # useful properties
     @property

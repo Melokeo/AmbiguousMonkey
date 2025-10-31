@@ -176,6 +176,8 @@ def isAniProcessed(ani_path: Path, sync_root_path: Path, ap: AniposeProcessor|No
     for daet_folder in ani_path.glob('*'):
         if not daet_folder.is_dir(): 
             continue
+        if not daet_folder.name or not DAET.isDaet(daet_folder.name):
+            continue
         csv_folder = daet_folder / 'pose-3d'
         for f in csv_folder.glob('*.csv'):
             process_stat[daet_folder.name] = True
@@ -205,7 +207,10 @@ def isAniProcessed(ani_path: Path, sync_root_path: Path, ap: AniposeProcessor|No
     else:
         return 0
 
-def getUnprocessedDlcData(data_path: Path, ap: AniposeProcessor|None = None, note: ExpNote|None=None) -> list[str]|None:
+def getUnprocessedDlcData(
+        data_path: Path, 
+        ap: AniposeProcessor|None = None, 
+        note: ExpNote|None=None) -> list[str]|None:
     '''
     input a data_path, then 
     '''

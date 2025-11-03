@@ -29,7 +29,7 @@ classifiers = [
 # Core dependencies
 dependencies = [
     "pandas",
-    "numpy==1.26.4",
+    "numpy",
     "scipy",
     "matplotlib",
     "diskcache",
@@ -92,6 +92,7 @@ ammonkey = [
     "**/*.ico",
     "**/*.toml",
 ]
+
 
 
 

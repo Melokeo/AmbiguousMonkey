@@ -27,10 +27,10 @@ class AmmApp:
             color_scheme_seed=ft.Colors.ORANGE,
             font_family=self.mono_font
         )
-        pg.window.height = 820
-        pg.window.width = 720
+        pg.window.height = 910
+        pg.window.width = 770
         pg.window.icon = str(Path(__file__).parent / 'ambmky.ico')
-        pg.title = 'Ambiguous Monkey V3.3.0'
+        pg.title = 'Ambiguous Monkey V3.3.2'
         # pg.scroll = ft.ScrollMode.ADAPTIVE
 
         # logging area
@@ -134,7 +134,7 @@ class AmmApp:
                 ft.Container(
                     content=self.tabs,
                     expand=False,
-                    height=480,
+                    height=550,
                 ),
                 ft.Container(
                     content=self.log_wrapper,

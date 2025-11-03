@@ -130,7 +130,7 @@ dlc-process-combos:
     L: fus-arm-L7
     R: fus-arm-R7
 
-anipose-conda-env: anipose-3d
+anipose-conda-env: amm #anipose-3d
 
 # keyword-based assignment of anipose config files, order sensitive!
 anipose-cfgs:

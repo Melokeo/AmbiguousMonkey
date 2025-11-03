@@ -86,7 +86,7 @@ class ColorLoggingFormatter(logging.Formatter):
         'ERROR': '\033[31mE\033[0m',     # Red
         'CRITICAL': '\033[41mC\033[0m',  # Red background
     }
-    def __init__(self, fmt=None, datefmt=None, style='%', *, width=95):
+    def __init__(self, fmt=None, datefmt=None, style='%', *, width=120):
         super().__init__(fmt, datefmt, style)   #type:ignore
         self.width = width # total character width for wrapping
 
@@ -142,7 +142,7 @@ def main(page: ft.Page):
                 padding=10,
                 border_radius=5,
                 height=400,
-                width=600
+                width=680
             )
         ])
     )

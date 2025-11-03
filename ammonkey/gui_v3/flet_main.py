@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 from ..core.expNote import get_xlsx_dates, iter_xlsx, ExpNote, DAET
+from ..core.config import Config
 
 from . import landfill as lf
 from .components.flet_logging import FletLogHandler, ColorLoggingFormatter
@@ -15,7 +16,7 @@ from .tabs.tab_setting import TabSetting
 
 class AmmApp:
     def __init__(self) -> None:
-        self.base_raw_root = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025'
+        self.base_raw_root = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025' 
         self.mono_font = 'Consolas'
 
     def __call__(self, pg: ft.Page) -> None:
@@ -25,9 +26,9 @@ class AmmApp:
             font_family=self.mono_font
         )
         pg.window.height = 820
-        pg.window.width = 680
+        pg.window.width = 720
         pg.window.icon = str(Path(__file__).parent / 'ambmky.ico')
-        pg.title = 'Ambiguous Monkey V3.0'
+        pg.title = 'Ambiguous Monkey V3.2.7'
         # pg.scroll = ft.ScrollMode.ADAPTIVE
 
         # logging area
@@ -53,6 +54,14 @@ class AmmApp:
         self.lg.setLevel(logging.DEBUG)
 
     def setup_layout(self) -> None:
+        self.dropdown_animal = ft.Dropdown(
+            options=[ft.dropdown.Option(a) for a in Config.animals],
+            on_change=self.on_animal_dropdown_change,
+            dense=True,
+            enable_search=True,
+            label='Animal',
+            padding=ft.padding.only(left=10, right=20),
+        )
         self.dropdown_notes = ft.Dropdown(
             options=[ft.dropdown.Option('* not initialized *')],
             on_change=self.on_dropdown_change,
@@ -60,15 +69,23 @@ class AmmApp:
             enable_search=True,
             label='ExpNote',
             padding=ft.padding.only(left=10, right=20),
+            width=180,
         )
 
-        self.btn_scan = ft.ElevatedButton(
-            text='Scan ExpNote',
+        self.btn_scan = ft.IconButton(
+            # text='Scan',
             icon=ft.Icons.SEARCH
+        )
+
+        self.btn_run_all = ft.IconButton(
+            # text='Scan',
+            icon=ft.Icons.PLAY_ARROW,
+            on_click=self.on_run_all,
         )
 
         self.curr_note = ft.Text(
             'No note loaded',
+            
         )
 
         self.curr_note_container = ft.Row(
@@ -111,7 +128,7 @@ class AmmApp:
 
         main_content = ft.Column(
             controls=[
-                ft.Row([self.dropdown_notes, self.btn_scan, self.curr_note_container]),
+                ft.Row([self.dropdown_animal, self.dropdown_notes, self.btn_scan, self.btn_run_all, self.curr_note_container]),
                 ft.Container(
                     content=self.tabs,
                     expand=False,
@@ -134,7 +151,7 @@ class AmmApp:
 
     def connect_loggers(self) -> None:
         flet_handler = FletLogHandler(self.log_area)
-        flet_handler.setFormatter(ColorLoggingFormatter(width=85))
+        flet_handler.setFormatter(ColorLoggingFormatter(width=100))
 
         if __name__.startswith('ammonkey'):
             self.lg.handlers.clear()
@@ -158,6 +175,21 @@ class AmmApp:
             for d, p in zip(notes_dates, notes_paths)
         ]
         self.pg.update()
+
+    def on_animal_dropdown_change(self, e:ft.ControlEvent) -> None:
+        new_animal = self.dropdown_animal.value
+        if not new_animal:
+            self.lg.debug('dropdown animal None.')
+            return
+        new_path = Config.animal_paths.get(new_animal, None)
+        if not new_path:
+            raise ValueError(f'{new_animal} isn\'t registered with a path in amm-config')
+        
+        self.base_raw_root = new_path
+        self.dropdown_notes.value = None
+        self.update_notes_dropdown()
+
+        self.lg.info(f'Changed animal to {new_animal}')
     
     def on_dropdown_change(self, e:ft.ControlEvent) -> None:
         dropdown: ft.dropdown.Dropdown = e.control
@@ -168,6 +200,7 @@ class AmmApp:
             sel_path  # fallback to key if not found
         )
 
+        self.lg.info(f'Reading ExpNote from {sel_text}')
         try:
             n = ExpNote(Path(sel_path))
             lf.note = n
@@ -195,7 +228,7 @@ class AmmApp:
         if self.tabs.selected_index == 0: # opened folder setup tab
             for tab in self.tabs_list[1:]:
                 tab.disabled = True
-                self.lg.debug(f'{tab.icon}, {tab.disabled=}')
+                # self.lg.debug(f'{tab.icon}, {tab.disabled=}')
             self.pg.update()
 
         return
@@ -229,6 +262,50 @@ class AmmApp:
                 self.lg.warning(f'Displayed note doesnt match processing data {lf.note_filtered.date} != {self.dropdown_notes.value}')
         if self.tabs.selected_index == 3:    # anipose
             self.tab_ani.on_model_refresh_click(e)
+            self.tab_ani.on_vid_refresh_click(e)
+    
+    def on_run_all(self, e):
+        if lf.USE_DASK:
+            self.lg.debug('dask full ppl')
+            try:
+                from ..dask.dask_factory import create_full_pipeline
+            except ImportError as e:
+                self.lg.error('Failed to import dask')
+                return
+            if not lf.note:
+                self.lg.error('No note is set')
+                return
+            if not lf.scheduler:
+                self.lg.error('Scheduler is not connected')
+                return
+            
+            if not self.tab_sync.vs:
+                self.lg.error('on_run_all: vid synchronizer instance not created')
+                return
+            model = self.tab_dlc.model_dropdown.value
+            if model:
+                self.lg.debug(f'on_run_all: {lf.note_filtered=}, {model=}')
+            else:
+                self.lg.error('on_run_all: dlc model not selected')
+                return
+            
+            tasks = create_full_pipeline(
+                note=lf.note_filtered,
+                processor_type=model,
+                rois=self.tab_sync.vs.cam_config.rois
+            )
+
+            futures = lf.scheduler.submit_tasks(tasks)
+            self.lg.info('Submitted to dask.')
+
+            if lf.AWAIT_DASK_RESULTS:
+                results = lf.scheduler.monitor_progress(futures)
+                self.lg.info("Dask returns:")
+                for i, r in enumerate(results):
+                    self.lg.info(f"{i:>4}. [{r.get('status')}] {r.get('task_id')} ({r.get('type')}): {r.get('message')}")
+        
+        else:
+            self.lg.debug('local full ppl (not implemented)')
 
 if __name__ == '__main__':
    ft.app(AmmApp())

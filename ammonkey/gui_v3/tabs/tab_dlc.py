@@ -110,14 +110,39 @@ class TabDlc:
         self.tab.update()
 
         try:
-            self.on_init_click(e)
-            if self.dp_func is None:
+            if self.dp_func is None:    # valid model selected
                 self.lg.error(f'on_run_dlc_click {e} get None dp')
                 return
-            self.dp = self.dp_func(lf.note_filtered)
-            self.dp.batchProcess()
-            
-            self.lg.info(f'Congrats! DLC finished (perhaps)')
+
+            if lf.USE_DASK:     # dask controlled dlc
+                from ...dask.dask_factory import create_dlc_tasks
+                if not lf.scheduler:
+                    self.lg.error('dask unset')
+                    return
+                model = self.model_dropdown.value
+                if model:
+                    self.lg.debug(f'create_dlc_tasks (dask): {lf.note_filtered=}, {model=}')
+                else:
+                    return
+                tasks = create_dlc_tasks(
+                    note=lf.note_filtered,
+                    processor_type=model,
+                )
+                futures = lf.scheduler.submit_tasks(tasks)
+                self.lg.info('Submitted to dask.')
+
+                if lf.AWAIT_DASK_RESULTS:
+                    results = lf.scheduler.monitor_progress(futures)
+                    self.lg.info("Dask finished:")
+                    for i, r in enumerate(results):
+                        self.lg.info(f"{i:>4}. [{r.get('status')}] {r.get('task_id')} ({r.get('type')}): {r.get('message')}")
+
+            else:   # in-app dlc
+                self.on_init_click(e)
+                self.dp = self.dp_func(lf.note_filtered)
+                self.dp.batchProcess()
+                self.lg.info(f'Congrats! DLC finished (perhaps)')
+
         finally:
             self.running_row.visible = False
             self.btn_run_dlc.disabled = False

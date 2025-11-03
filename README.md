@@ -1,8 +1,6 @@
 # Ambiguous Monkey
 
-> Package is running on windows by manually placing it in site-packages. Installation through pip is WIP
-
-A fully rewritten deeplabcut+anipose data managing and processing package
+A fully rewritten deeplabcut+anipose data managing and processing package for better efficiency and data clarity.
 
 Mel
 
@@ -21,6 +19,30 @@ Previous GUI is kept and still works itself but the file structure is outdated f
 Considering that deeplabcut requires conda environment, it is recommended to install this package with deeplabcut in the same conda environment.
 
 See `amm-env.yaml`. Some syntaxes require Python >= 3.10.
+
+## Installation
+
+To install `ammonkey`, you will need to create a conda env per `amm-env.yaml`. The new env is named `amm` by default.
+
+```bash
+conda env create -f "whatever-path/amm-env.yaml"
+```
+
+Due to the package resolving and installation, this might take a while to finish.
+
+Then the GUI can be started with:
+
+```bash
+ammonkey
+```
+
+Basic setups can be configured in `site-packages/ammonkey/cfgs/amm-config.yaml`.
+
+~~If there is already an env with deeplabcut installed, `ammonkey` can also be installed via:~~ [this hasn't been tested for compatibility yet]
+
+```bash
+pip install ammonkey
+```
 
 ## Workflow
 

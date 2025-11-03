@@ -9,7 +9,7 @@ from .. import landfill as lf
 if TYPE_CHECKING:
     from ..flet_main import AmmApp
 
-def run_all_local(e: ft.ControlEvent, app: AmmApp) -> None:
+def run_all_local(e: ft.ControlEvent, app: 'AmmApp') -> None:
     dlg_sync_set_roi = ft.AlertDialog(
         title=ft.Text('Set ROIs needed'),
         content=ft.Text('Plz set ROIs before running everything.'),
@@ -57,7 +57,7 @@ def run_all_local(e: ft.ControlEvent, app: AmmApp) -> None:
 
     app.tab_final.on_collect_click(e)
 
-def run_all_dask(app: AmmApp) -> None:
+def run_all_dask(app: 'AmmApp') -> None:
     try:
         from ...dask.dask_factory import create_full_pipeline
     except ImportError as e:

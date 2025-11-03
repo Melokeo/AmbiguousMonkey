@@ -14,6 +14,8 @@ from .tabs.tab_ani import TabAnipose
 from .tabs.tab_final import TabFinal
 from .tabs.tab_setting import TabSetting
 
+from .business.full_pipeline import run_all_local, run_all_dask
+
 class AmmApp:
     def __init__(self) -> None:
         self.base_raw_root = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025' 
@@ -254,7 +256,7 @@ class AmmApp:
 
     def on_tab_change(self, e:ft.ControlEvent):
         if self.tabs.selected_index != 0:
-            if not lf.note and self.tabs.selected_index != 5:
+            if not lf.note and self.tabs.selected_index != 5: # 5 is setting
                 self.lg.warning(f'Note is not set')
                 self.tabs.selected_index = 0
                 self.pg.update()
@@ -265,47 +267,18 @@ class AmmApp:
             self.tab_ani.on_vid_refresh_click(e)
     
     def on_run_all(self, e):
+        self.btn_run_all.disabled = True
+        self.pg.update()
+
         if lf.USE_DASK:
             self.lg.debug('dask full ppl')
-            try:
-                from ..dask.dask_factory import create_full_pipeline
-            except ImportError as e:
-                self.lg.error('Failed to import dask')
-                return
-            if not lf.note:
-                self.lg.error('No note is set')
-                return
-            if not lf.scheduler:
-                self.lg.error('Scheduler is not connected')
-                return
-            
-            if not self.tab_sync.vs:
-                self.lg.error('on_run_all: vid synchronizer instance not created')
-                return
-            model = self.tab_dlc.model_dropdown.value
-            if model:
-                self.lg.debug(f'on_run_all: {lf.note_filtered=}, {model=}')
-            else:
-                self.lg.error('on_run_all: dlc model not selected')
-                return
-            
-            tasks = create_full_pipeline(
-                note=lf.note_filtered,
-                processor_type=model,
-                rois=self.tab_sync.vs.cam_config.rois
-            )
-
-            futures = lf.scheduler.submit_tasks(tasks)
-            self.lg.info('Submitted to dask.')
-
-            if lf.AWAIT_DASK_RESULTS:
-                results = lf.scheduler.monitor_progress(futures)
-                self.lg.info("Dask returns:")
-                for i, r in enumerate(results):
-                    self.lg.info(f"{i:>4}. [{r.get('status')}] {r.get('task_id')} ({r.get('type')}): {r.get('message')}")
-        
+            run_all_dask(self)
         else:
-            self.lg.debug('local full ppl (not implemented)')
+            self.lg.info('Run full pipeline local')
+            run_all_local(e, self)
+
+        self.btn_run_all.disabled = False
+        self.pg.update()
 
 if __name__ == '__main__':
    ft.app(AmmApp())

@@ -286,27 +286,27 @@ def full_check(n: ExpNote) -> list[str]:
     all_status = sc.check_sync_all_daets()
     for daet, (status, text) in all_status.items():
         if status:
-            texts.append(f'\033[92mDAET: {daet}\033[0m')
+            texts.append(f'\033[32mDAET: {daet}\033[0m')
         else:
-            texts.append(f'\033[91mDAET: {daet}, Status: {status}, Details: {text}\033[0m')
+            texts.append(f'\033[31mDAET: {daet}, Status: {status}, Details: {text}\033[0m')
     
     texts.append('\nDLC Model Sets:')
     dlc_model_sets = sc.check_dlc_all_daets()
     for daet, (status, text) in dlc_model_sets.items():
         if daet.isCalib: continue
         if status:
-            texts.append(f'\033[92mDAET: {daet}, Model Sets: {text}\033[0m')
+            texts.append(f'\033[32mDAET: {daet}, Model Sets: {text}\033[0m')
         else:
-            texts.append(f'\033[91mDAET: {daet}, Model Sets: {text}\033[0m')
+            texts.append(f'\033[31mDAET: {daet}, Model Sets: {text}\033[0m')
 
     texts.append('\nAnipose Model Sets:')
     ani_model_sets = sc.check_ani_all_daets()
     for daet, (status, text) in ani_model_sets.items():
         if daet.isCalib: continue
         if status:
-            texts.append(f'\033[92mDAET: {daet}, Model Sets: {text}\033[0m')
+            texts.append(f'\033[32mDAET: {daet}, Model Sets: {text}\033[0m')
         else:
-            texts.append(f'\033[91mDAET: {daet}, Model Sets: {text}\033[0m')
+            texts.append(f'\033[31mDAET: {daet}, Model Sets: {text}\033[0m')
     
     """texts.append('\nAnipose label-3d:')
     model_sets = sc.ani_msn.keys()
@@ -314,23 +314,23 @@ def full_check(n: ExpNote) -> list[str]:
         ani_vid_3d = sc.check_ani_vid_3d_all_daets_single_ms(ms)
         for daet, (status, text) in ani_vid_3d.items():
             if status:
-                texts.append(f'\033[92m{ms} / {daet}\033[0m')
+                texts.append(f'\033[32m{ms} / {daet}\033[0m')
             else:
-                texts.append(f'\033[91m{ms} / {daet} ({text})\033[0m')
+                texts.append(f'\033[31m{ms} / {daet} ({text})\033[0m')
 
     texts.append('\nAnipose label-combined:')
     for ms in model_sets:
         ani_vid_combined = sc.check_ani_vid_combined_all_daets_single_ms(ms)
         for daet, (status, text) in ani_vid_combined.items():
             if status:
-                texts.append(f'\033[92m{ms} / {daet}\033[0m')
+                texts.append(f'\033[32m{ms} / {daet}\033[0m')
             else:
-                texts.append(f'\033[91m{ms} / {daet} ({text})\033[0m')"""
+                texts.append(f'\033[31m{ms} / {daet} ({text})\033[0m')"""
 
     texts.append('\nAnipose label-combined (simple check):')
     ani_vid_combined_simple = sc.check_ani_vid_combined_simple_all_ms()
     texts.append(', '.join([
-        f'\033[92m{ms}\033[0m' if status else f'\033[91m{ms}\033[0m'
+        f'\033[32m{ms}\033[0m' if status else f'\033[31m{ms}\033[0m'
         for ms, status in ani_vid_combined_simple.items()
     ]))
 

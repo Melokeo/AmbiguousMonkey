@@ -111,7 +111,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         if not self.calib_file:
             self.calib_file = self.getCalibFile()
             if not self.calib_file:
-                logger.warning('Note has no matching calib file, need calib first')
+                logger.warning('Note has no matching calib file, need to calibrate first')
 
     
     def __repr__(self):

@@ -28,7 +28,7 @@ class AmmApp:
         pg.window.height = 820
         pg.window.width = 720
         pg.window.icon = str(Path(__file__).parent / 'ambmky.ico')
-        pg.title = 'Ambiguous Monkey V3.2.7'
+        pg.title = 'Ambiguous Monkey V3.3.0'
         # pg.scroll = ft.ScrollMode.ADAPTIVE
 
         # logging area

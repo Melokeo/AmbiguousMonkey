@@ -5,6 +5,7 @@ import subprocess
 import json
 import shutil
 import re
+import os
 import logging
 from datetime import datetime
 import bisect   # to lookup calibs
@@ -95,7 +96,7 @@ BASE_DIR = Path(__file__).parent.parent # should be ammonkey/
 class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
     note: ExpNote
     model_set_name: str
-    conda_env: str = 'anipose-3d'
+    conda_env: str = Config.anipose_env
     config_file: Path = None    #type:ignore
     calib_file: Path | None = None     
     calib_lib: CalibLib = None  #type:ignore
@@ -387,21 +388,43 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         else:
             return True
         
-    def makeVideos(self) -> None:
+    def makeVideos(self, start:float|None=None, end:float|None=None) -> None:
         '''label-3d + label-combined\n
         - raise: RuntimeError on subprocess failure
-        '''
-        cmd = [
+        ''' 
+
+        #TODO make this work on non-Windows system
+
+        drive = os.path.splitdrive(str(self.ani_root_path))[0]
+        cmd_header = [
             'conda', 'activate', self.conda_env, '&&',
-            'P:', '&&',
+            drive, '&&',
             'cd', str(self.ani_root_path), '&&',
-            'anipose', 'label-3d', '&&',
-            'anipose', 'label-combined'
         ]
+
+        cmd = cmd_header + [
+            'anipose', 'label-3d',
+        ]
+        if start is not None and 0 < start < 1: # start == 0 case same as no start
+            cmd.extend(['--start', str(start)])
+        if end is not None and 0 < end < 1: 
+            cmd.extend(['--end', str(end)])
         result = subprocess.run(cmd, shell=True, check=True)
         if result.stderr:
             logger.error(result.stderr)
-            raise RuntimeError(f'makeVideos failed: {result.stderr}')
+            raise RuntimeError(f'label-3d failed: {result.stderr}')
+        
+        cmd = cmd_header + [
+            'anipose', 'label-combined',
+        ]
+        if start is not None:
+            cmd.extend(['--start', str(start)])
+        if end is not None:
+            cmd.extend(['--end', str(end)])
+        result = subprocess.run(cmd, shell=True, check=True)
+        if result.stderr:
+            logger.error(result.stderr)
+            raise RuntimeError(f'label-combined failed: {result.stderr}')
 
     def copy_vid_to_daet(self, daet:DAET) -> None:
         '''copy raw videos to anipose folder for this daet'''
@@ -416,8 +439,13 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
                 except OSError as e:
                     logger.error(f'ssc copy failed {e}')
     
-    def copy_videos_all_daets(self) -> None:
+    def copy_videos_all_daets(self, skip_non_exist:bool=True) -> None:
+        included_daet_dirs = list(self.ani_root_path.glob('*'))
         for daet in self.note.daets:
+            if skip_non_exist:
+                if str(daet).lower() not in [d.name.lower() for d in included_daet_dirs]:
+                    logger.debug(f'skipped copy for non-existing ani daet {daet}')
+                    continue
             self.copy_vid_to_daet(daet)
 
     def pee(self, daet_root: Path) -> None:

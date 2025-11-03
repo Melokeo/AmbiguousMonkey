@@ -10,6 +10,7 @@ from pathlib import Path
 from .daet import DAET
 from .ani import AniposeProcessor
 from .expNote import ExpNote
+from .statusChecker import StatusChecker
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +127,8 @@ def parseDLCFolderName(f: Path) -> tuple[str, int, int]:
     name, ymd, dex = m.groups()
     return name, int(ymd), int(dex)
 
-def searchModelSets(data_path: Path|None) -> set[str] | None:
-    if not data_path: return None
+def searchModelSets(data_path: Path) -> set[str] | None:
+    #FIXME here it's incompatible w/ config logic
     pattern = re.compile(r'^(Pull-LR|Brkm|BBT|TS-LR|Pull-Hand|fus-arm)-\d{8}_\d{3,4}$')
     seen = set()
     for file in Path(data_path).rglob('*'):
@@ -220,14 +221,15 @@ def getUnprocessedDlcData(
     if not sync_root_path.exists():
         raise FileNotFoundError(f'FNF: {sync_root_path}')
     
-    sets = searchModelSets(sync_root_path)
-    if not sets:
+    model_sets = searchModelSets(sync_root_path)
+    if not model_sets:
         return None
     
     unprocessed:list[str] = []
-    for p in sets:
+    for p in model_sets:
         if_ap = isAniProcessed(ani_path=data_path / 'anipose' / p, sync_root_path=sync_root_path, ap=ap, note=note)
         logger.debug(if_ap)
         if if_ap in [0, -1]:
             unprocessed.append(p)
     return unprocessed if unprocessed else None
+        

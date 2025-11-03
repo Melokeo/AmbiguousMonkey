@@ -199,6 +199,84 @@ class StatusChecker:
             stat, text = self.check_ani_single_daet(daet)
             results[daet] = (stat, text)
         return results
+    
+    # anipose video status checker:
+    # label-3d and label-combined
+    def check_ani_vid_3d_single_daet_single_ms(self, daet: DAET, model_set: str) -> tuple[bool, str]:
+        ani_root = self.note.getAniRoot()
+        vid_3d_dir = ani_root / model_set / str(daet) / 'videos-3d'
+        if not vid_3d_dir.exists():
+            return False, f'No videos-3d dir'
+        for f in vid_3d_dir.glob('*.mp4'):
+            if str(daet).lower() in f.name.lower():
+                return True, f.name
+        return False, 'videos-3d dir exists but no match video found'
+
+    def check_ani_vid_3d_all_daets_single_ms(self, model_set: str) -> dict[DAET, tuple[bool, str]]:
+        results = {}
+        for daet in self.note.daets:
+            stat, text = self.check_ani_vid_3d_single_daet_single_ms(daet, model_set)
+            results[daet] = (stat, text)
+        return results
+
+    def check_ani_vid_combined_single_daet_single_ms(self, daet: DAET, model_set: str) -> tuple[bool, str]:
+        ani_root = self.note.getAniRoot()
+        daet_root = ani_root / model_set / str(daet)
+        if not daet_root.exists():
+            return False, f'No DAET dir'
+        vid_combined_dir = daet_root / 'videos-combined'
+        if not vid_combined_dir.exists():
+            return False, f'No videos-combined dir'
+        for f in vid_combined_dir.glob('*.mp4'):
+            if str(daet).lower() in f.name.lower():
+                return True, f.name
+        return False, 'videos-combined dir exists but no match video found'
+
+    def check_ani_vid_combined_all_daets_single_ms(self, model_set: str) -> dict[DAET, tuple[bool, str]]:
+        results = {}
+        for daet in self.note.daets:
+            stat, text = self.check_ani_vid_combined_single_daet_single_ms(daet, model_set)
+            results[daet] = (stat, text)
+        return results
+    
+    def check_ani_vid_3d_all_ms(self) -> dict[str, bool]:
+        results = {}
+        for ms in self.ani_msn.keys():
+            res = self.check_ani_vid_3d_all_daets_single_ms(ms)
+            results[ms] = all([r[0] for r in res.values()])
+        return results
+    
+    def check_ani_vid_combined_all_ms(self) -> dict[str, bool]:
+        results = {}
+        for ms in self.ani_msn.keys():
+            res = self.check_ani_vid_combined_all_daets_single_ms(ms)
+            results[ms] = all([r[0] for r in res.values()])
+        return results
+    
+    def check_ani_vid_combined_simple_all_ms(self) -> dict[str, bool]:
+        results = {}
+        ani_root = self.note.getAniRoot()
+        for ms in self.ani_msn.keys():
+            ms_dir = ani_root / ms
+            results[ms] = True
+            for daet_dir in ms_dir.glob('*'):
+                if not DAET.isDaet(daet_dir.name):
+                    continue
+                if DAET.fromString(daet_dir.name).isCalib:
+                    continue
+                vid_combined_dir = daet_dir / 'videos-combined'
+                if not vid_combined_dir.exists():
+                    results[ms] = False
+                    break
+                for f in vid_combined_dir.glob('*.mp4'):
+                    if str(daet_dir.name).lower() in f.name.lower():
+                        results[ms] = True
+                        break
+                else:
+                    results[ms] = False
+                    break
+
+        return results
 
 def full_check(n: ExpNote) -> list[str]:
     sc = StatusChecker(n)
@@ -230,10 +308,36 @@ def full_check(n: ExpNote) -> list[str]:
         else:
             texts.append(f'\033[91mDAET: {daet}, Model Sets: {text}\033[0m')
     
+    """texts.append('\nAnipose label-3d:')
+    model_sets = sc.ani_msn.keys()
+    for ms in model_sets:
+        ani_vid_3d = sc.check_ani_vid_3d_all_daets_single_ms(ms)
+        for daet, (status, text) in ani_vid_3d.items():
+            if status:
+                texts.append(f'\033[92m{ms} / {daet}\033[0m')
+            else:
+                texts.append(f'\033[91m{ms} / {daet} ({text})\033[0m')
+
+    texts.append('\nAnipose label-combined:')
+    for ms in model_sets:
+        ani_vid_combined = sc.check_ani_vid_combined_all_daets_single_ms(ms)
+        for daet, (status, text) in ani_vid_combined.items():
+            if status:
+                texts.append(f'\033[92m{ms} / {daet}\033[0m')
+            else:
+                texts.append(f'\033[91m{ms} / {daet} ({text})\033[0m')"""
+
+    texts.append('\nAnipose label-combined (simple check):')
+    ani_vid_combined_simple = sc.check_ani_vid_combined_simple_all_ms()
+    texts.append(', '.join([
+        f'\033[92m{ms}\033[0m' if status else f'\033[91m{ms}\033[0m'
+        for ms, status in ani_vid_combined_simple.items()
+    ]))
+
     return texts
 
 if __name__ == '__main__':  
-    p = Path(r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Fusillo\2025\09\20250916')
+    p = Path(r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Fusillo\2025\10\20251031')
     results = full_check(ExpNote(p))
     for r in results:
         print(r)

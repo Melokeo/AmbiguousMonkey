@@ -64,6 +64,13 @@ class DLCModel:
     def id_output(self) -> str:
         '''how it appears in the output filenames of dlc'''
         return f"{self.name}shuffle{self.shuffle}"
+    
+    @property
+    def start_date(self) -> str:
+        m = re.search(r'(\d{8})', self.name)
+        return m.group(1) if m else '00000000'
+    
+    #FIXME here date should be assigned/overridden beforehand to avoid cutting one set into two
     @property
     def final_folder_name(self) -> str:
         return f"{self.easy_name}-{datetime.now().strftime('%Y%m%d')} [{self.md5_short}]"

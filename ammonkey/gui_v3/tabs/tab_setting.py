@@ -8,6 +8,12 @@ class TabSetting:
     def __init__(self, logger: logging.Logger) -> None:
         self.lg = logger
 
+        self.btn_open_cfg = ft.ElevatedButton(
+            text='Open config file',
+            icon=ft.Icons.SETTINGS,
+            on_click=self.on_open_cfg,
+        )
+
         levels = ['debug', 'info', 'warning', 'error']
         self.level_dropdown = ft.Dropdown(
             options=[ft.dropdown.Option(l) for l in levels],
@@ -57,6 +63,7 @@ class TabSetting:
 
         self.col = ft.Column(
             controls=[
+                self.btn_open_cfg,
                 self.level_dropdown,
                 self.switch_dask,
                 self.edt_dask_addr,
@@ -133,3 +140,12 @@ class TabSetting:
         for r in results:
             print(r)
         self.lg.info('stat check finished. plz check command line for details')
+
+    def on_open_cfg(self, e):
+        '''open ammonkey/cfgs/amm-config.yaml'''
+        self.lg.debug('on_open_cfg')
+        import os
+        from pathlib import Path
+        cfg_path = Path(__file__).parent.parent.parent / 'cfgs' / 'amm-config.yaml'
+        os.startfile(cfg_path)
+        

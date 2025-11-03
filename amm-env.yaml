@@ -1,8 +1,8 @@
 name: amm
 channels:
+  - conda-forge
   - defaults
   - nvidia
-  - conda-forge
   - https://repo.anaconda.com/pkgs/main
   - https://repo.anaconda.com/pkgs/r
   - https://repo.anaconda.com/pkgs/msys2
@@ -10,27 +10,31 @@ dependencies:
   - cudatoolkit=11.2
   - cudnn=8.1.0
   - diskcache
-  - ffmpeg
+  - dask-core=2025.7.0
+  - ffmpeg=5.1.2
   - librosa
   - matplotlib
-  - numpy==1.26.4
   - openpyxl
-  - pandas
-  - pathlib
+  - pandas=2.3.0
   - pip
   - python=3.10
   - scipy
   - tqdm
-  - dask
   - distributed
-  - mayavi
+  - mayavi=4.8.2
+  - vtk=9.2.6
+  - vtk-base=9.2.6
   - pip:
     - tensorflow==2.10.*
     - deeplabcut==3.0.0rc7
     - anipose
     - opencv-python==4.11.0.86
+    - numpy==1.26.4
     - flet
     - dask
+    - pathlib
+    - dask==2025.5.1
+    - dask-image==2024.5.3
     # below are for deeplabcut gui
     - tensorpack
     - tf-slim
@@ -43,6 +47,3 @@ dependencies:
     # below for anipose
     - configobj
     
-
-
-

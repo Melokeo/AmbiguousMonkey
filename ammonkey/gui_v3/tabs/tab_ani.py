@@ -292,7 +292,7 @@ class TabAnipose:
             #TODO include label-3d in the future
             udd = [ms for ms, stat in process_stats.items() if not stat]
         else:
-            udd = None 
-        if udd is None:
+            udd = None
+        if not udd:  # both None and []
             udd = [NOTHING]
         return udd

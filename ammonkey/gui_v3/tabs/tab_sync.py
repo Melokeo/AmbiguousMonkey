@@ -79,7 +79,8 @@ class TabSync:
 
     def on_set_all(self, e: ft.ControlEvent):
         if not hasattr(self, 'vs'):
-            self.lg.error('on_set_all: synchronizer not created')
+            self.lg.info('on_set_all: synchronizer not created')
+            self.on_create_click(e)
             return
         self.vs.setROI()
         self.lg.debug(self.vs.cam_config.cams)
@@ -104,7 +105,7 @@ class TabSync:
                 return
             tasks = create_sync_pipeline(
                 note=self.vs.notes,
-                rois=self.vs.cam_config.rois,
+                rois=self.vs.cam_config.rois, #type: ignore
             )
             futs = sched.submit_tasks(tasks)
             result = sched.monitor_progress(futs)

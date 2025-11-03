@@ -110,7 +110,7 @@ class TabDlc:
         self.tab.update()
 
         try:
-            if self.dp_func is None:    # valid model selected
+            if not hasattr(self, 'dp_func') or self.dp_func is None:    # valid model selected
                 self.lg.error(f'on_run_dlc_click {e} get None dp')
                 return
 

@@ -1,8 +1,8 @@
 # Ambiguous Monkey
 
-A fully rewritten deeplabcut+anipose data managing and processing package for better efficiency and data clarity.
+A package that focuses on high-efficiency markerless 3D reconstruction analysis on large datasets.
 
-Mel
+Mel Xu
 
 2025.6
 
@@ -11,21 +11,20 @@ Mel
 
 ## Overview
 
-Currently it runs as separate sub-modules and uses command lines.
-Previous GUI is kept and still works itself but the file structure is outdated for dlc and anipose steps.
+This tool covers a workflow that involves multi-modal video synchronization, DeepLabCut analysis, Anipose reconstruction and customizable wiring.
 
-## Dependency
+Useful command line functions as well as a user-friendly GUI are available from this package.
 
-Considering that deeplabcut requires conda environment, it is recommended to install this package with deeplabcut in the same conda environment.
+It is originally developped to help with handling our monkey behavioral data. We have 4 cameras recording simultaneuously the monkey behavior that generates tens of GBs of videos. This tool simplifies tedious organizing and processing steps into ideally **one click**.
 
-See `amm-env.yaml`. Some syntaxes require Python >= 3.10.
+This package is written and tested on Windows 11 and 10. Theoretically it also works on Unix, but that is not tested.
 
 ## Installation
 
 To install `ammonkey`, you will need to create a conda env per `amm-env.yaml`. The new env is named `amm` by default.
 
 ```bash
-conda env create -f "whatever-path/amm-env.yaml"
+conda env create -f "whatever/path/amm-env.yaml"
 ```
 
 Due to the package resolving and installation, this might take a while to finish.
@@ -36,7 +35,7 @@ Then the GUI can be started with:
 ammonkey
 ```
 
-Basic setups can be configured in `site-packages/ammonkey/cfgs/amm-config.yaml`.
+That's it! To adapt different experiment setups, multiple parameters can be configured in `site-packages/ammonkey/cfgs/amm-config.yaml`, or by clicking the "open config" button in the setting tab in GUI.
 
 ~~If there is already an env with deeplabcut installed, `ammonkey` can also be installed via:~~ [this hasn't been tested for compatibility yet]
 

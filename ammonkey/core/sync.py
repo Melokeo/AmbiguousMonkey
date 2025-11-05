@@ -3,6 +3,8 @@ VidSynchronizer: Combined sync detection and execution of vid sets
 Usage: syncVideos(ExpNote)
 '''
 
+#TODO: implement detection failure -> prompt-retry logic
+
 import os
 import json
 import logging
@@ -54,7 +56,10 @@ class SyncResult:
     config_path: Optional[Path] = None
 
     def __repr__(self):
-        return f'SyncResult({self.daet}, {self.status})'
+        if self.status == 'success':
+            return f'SyncResult({self.daet}, {self.status})'
+        else:
+            return f'SyncResult({self.daet}, {self.status}: {self.message})'
 
 class VidSynchronizer:
     """Handles video synchronization with LED and audio detection"""
@@ -83,6 +88,54 @@ class VidSynchronizer:
                 return
 
         self.cam_config.batchSelectROIs(vid_paths)
+
+    def checkRois(self, daet_to_check:DAET|None=None, frame:int=500, cam:int|None=None):
+        if daet_to_check is None:
+            daet_to_check = next((daet for daet in self.notes.daets if not daet.isCalib), None)
+        if daet_to_check is None:
+            return
+
+        while True:
+            vid_paths = self.notes.getVidSetPaths(daet_to_check)
+            if vid_paths and any(v is not None for v in vid_paths):
+                break
+            daet_to_check = next((daet for daet in self.notes.daets if not daet.isCalib and daet != daet_to_check), None)
+            if daet_to_check is None:
+                return
+
+        rois = self.cam_config.rois
+        if len(rois) != len(vid_paths):
+            self.wood.logger.error('Number of ROIs does not match number of videos')
+            return
+        
+        for vp, roi in zip(vid_paths, rois.values()):
+            if vp is None:
+                continue
+            Roi.show_saved_rois(str(vp), ROI=roi, frame=frame)
+    
+    def checkRoi(self, cam_to_check: int, daet_to_check:DAET|None = None, frame:int=500):
+        if daet_to_check is None:
+            daet_to_check = next((daet for daet in self.notes.daets if not daet.isCalib), None)
+        if daet_to_check is None:
+            return
+        
+        vp = ''
+        
+        while daet_to_check:
+            vid_paths = self.notes.getVidSetPaths(daet_to_check)
+            #FIXME here there is a mapping problem cam_to_check -> vid_path set index
+            # cam_header and getVidSetPath should coordinate.
+            if (vp:=vid_paths[cam_to_check+1]) is not None:
+                break
+            else:
+                daet_to_check = next((daet for daet in self.notes.daets if not daet.isCalib and daet != daet_to_check), None)
+
+        if daet_to_check:
+            Roi.show_saved_rois(
+                video_path=vp, 
+                ROI=self.cam_config.rois.get(cam_to_check+1, [0,0,5,5]),
+                frame=frame
+            )
 
     def syncAll(self, task: Task = Task.ALL, skip_existing: bool = True) -> list[SyncResult]:
         """

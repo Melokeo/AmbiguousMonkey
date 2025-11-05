@@ -521,18 +521,19 @@ def get_xlsx_dates(root_dir: str, nesting_level: int = 2) -> list[str]:
     Scans a directory and returns a list of date strings from the filenames.
     ['yyyymmdd',  ...]
     """
-    date_list = []
-    for file_path in iter_xlsx(root_dir, nesting_level=nesting_level):
-        filename = os.path.basename(file_path)
-        name_without_ext = os.path.splitext(filename)[0]
-        date_part = name_without_ext.split('_')[-1]
-        # shoulg look like a date, this is fragile though
-        if date_part.isdigit() and len(date_part) == 8:
-            date_list.append(date_part)
-            
-    return date_list
+    return xlsx_iter_to_dates(iter_xlsx(root_dir, nesting_level))
 
-def mian() -> None:
+def xlsx_iter_to_dates(xlsx_iter: Iterator[str]) -> list[str]:
+    '''convert xlsx iterator to date list'''
+    dates = []
+    for p in xlsx_iter:
+        fname = os.path.basename(p)
+        date_str = fname.split('.')[-2].split('_')[-1]
+        if len(date_str) == 8 and date_str.isdigit():
+            dates.append(date_str)
+    return dates
+
+def mian() -> None: # its very funny how every AI tried to correct this into "main".
     '''xiang chi mian le [usage example]'''
     # test with actual file
     raw_path = Path(r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025\04\20250403')

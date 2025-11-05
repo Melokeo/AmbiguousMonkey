@@ -28,9 +28,9 @@ class CamGroup(Enum):
 class LedColor(Enum):
     YELLOW = 'Y'
     GREEN  = 'G'
+    BLUE   = 'B'
     # below are reserved, just
     RED    = 'R'
-    BLUE   = 'B'
     WHITE  = 'W'
     NONE   = None
 
@@ -150,6 +150,7 @@ class CamConfig:
                 #FIXME here should refer to [vid order - cam idx mapping] from config above
                 # instead of directly i+1
                 self.rois[i+1] = tuple(roi)
+                logger.debug(f'Updated roi[{i+1}]: {roi}')
 
 if __name__ == '__main__':
     cam_cfg = CamConfig()

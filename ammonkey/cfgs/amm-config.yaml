@@ -18,7 +18,7 @@ cams:
     name: cam2
     index: 2
     group: L
-    led_color: G
+    led_color: B
     roi: [211, 8, 149, 119]
     header_in_note: "Camera files \n(2 LL)"
   3:

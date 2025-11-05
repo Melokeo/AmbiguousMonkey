@@ -43,8 +43,8 @@ constraints = [
     ["Fx3", "Fx2"]
 ]
 
-scale_smooth = 1
-scale_length = 1
+scale_smooth = 8
+scale_length = 4
 scale_length_weak = 0.5
 reproj_error_threshold = 3
 score_threshold = 0.8

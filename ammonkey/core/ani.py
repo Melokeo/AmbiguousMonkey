@@ -417,9 +417,9 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         cmd = cmd_header + [
             'anipose', 'label-combined',
         ]
-        if start is not None:
+        if start is not None and 0 < start < 1:
             cmd.extend(['--start', str(start)])
-        if end is not None:
+        if end is not None and 0 < end < 1:
             cmd.extend(['--end', str(end)])
         result = subprocess.run(cmd, shell=True, check=True)
         if result.stderr:

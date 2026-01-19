@@ -37,13 +37,14 @@ def find_start_frame(path: str, roi: list[int]|tuple[int,...], threshold: int, L
                   out_path: str = 'Detection Output', 
                   led_persist_sec: float = 0.033, 
                   led_persist_tolerance: float = 0.0,
-                  led_duration_range: tuple[float, float] = (1.0, 1.0)) -> int:
+                  led_duration_range: tuple[float, float] = (1.0, 1.0),
+                  save_detection: bool = True) -> int:
     """
     params:
         path: video path
         roi: detection area [x, y, w, h]
         threshold: (0-255)
-        LED: LED color ("Y" or "G")
+        LED: LED color ("Y", "G", "B")
         led_persist_sec: requirement of led lit duration
         led_persist_tolerance: noise level allowed in the lit duration. the lower the stricter.
     return:
@@ -73,7 +74,8 @@ def find_start_frame(path: str, roi: list[int]|tuple[int,...], threshold: int, L
 
     hsv_ranges = {
         "Y": ([20, 100, 100], [30, 255, 255]),   
-        "G": ([36, 100, 100], [77, 255, 255])    
+        "G": ([36, 100, 100], [77, 255, 255]),
+        "B": ([100, 80, 150], [130, 255, 255])    
     }
     
     lower, upper = hsv_ranges.get(LED, ([0,0,0], [0,0,0]))
@@ -189,7 +191,7 @@ def process_videos(cfg):
         if cfg.get('detected', 'F') == 'T':
             start_frame = int(vc['start'])
             if start_frame == -1:
-                raise ValueError('Detection recorded but start frame not valid (NaN or -1)')
+                raise ValueError(f'Detection recorded but start frame not valid (NaN or -1), info: {vc["path"]=}, {vc["start"]=}')
         else:
             start_frame = find_start_frame(vc['path'], vc['roi'], cfg['threshold'], vc['LED'])
         meta.append({**vc, 'total_frames': total_frames, 'fps': fps, 'start_frame': start_frame})  
@@ -263,7 +265,9 @@ def process_videos(cfg):
 
 if __name__ == "__main__":
     # paths = ['',]
-
+    vid = r"P:\projects\monkeys\Chronic_VLL\DATA_RAW\Fusillo\2025\11\20251103\cam2\C1616.MP4"
+    print(find_start_frame(vid, (1068, 18, 72, 59), 220, "B", out_path='.'))
+    exit()
     try:
         with open(r"P:\projects\monkeys\Chronic_VLL\DATA\Pici\2025\03\20250310\SynchronizedVideos\Calib\sync_config_Calib.json") as f:
             process_videos(json.load(f))

@@ -4,6 +4,7 @@ import flet as ft
 
 from ...core.camConfig import CamConfig, CamGroup, Camera
 from ...core.camConfig import LedColor
+from ...utils import ROIConfig as Roi
 
 class RowCamCfg(ft.Row):
     def __init__(self, camera: Camera, logger: logging.Logger):
@@ -11,6 +12,7 @@ class RowCamCfg(ft.Row):
         self.lg = logger
         self.cam = camera
         self.build()
+        self.lg.debug(f'Connected row with Cam on {id(self.cam)}')
 
     def build(self):
         self.chk = ft.Checkbox(
@@ -21,6 +23,7 @@ class RowCamCfg(ft.Row):
             options=[
                 ft.dropdown.Option('Y'),
                 ft.dropdown.Option('G'),
+                ft.dropdown.Option('B'),
             ],  # expand to match LedColor in the future
             value=self.cam.led_color.value if self.cam.led_color else '',
             on_change=self.on_led_change,

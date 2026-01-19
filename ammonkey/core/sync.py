@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
+import warnings
 
 from ..utils import VidSyncLED as SyncLED
 from ..utils import VidSyncAud as SyncAud
@@ -210,13 +211,18 @@ class VidSynchronizer:
                     
                     # save waveforms for debugging
                     sync_detection_path = self._getSyncDetectionPath()
-                    SyncAud.save_synced_waveforms(
-                        sync_results,
-                        sr=self.config.audio_sample_rate,
-                        fps=self.config.audio_fps,
-                        duration=self.config.audio_save_duration,
-                        tgt_path=str(sync_detection_path)
-                    )
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore", 
+                            message="Starting a Matplotlib GUI outside of the main thread"
+                        )
+                        SyncAud.save_synced_waveforms(
+                            sync_results,
+                            sr=self.config.audio_sample_rate,
+                            fps=self.config.audio_fps,
+                            duration=self.config.audio_save_duration,
+                            tgt_path=str(sync_detection_path)
+                        )
                     
                     # extract start frames
                     starts = [result[-1] if result else None for result in sync_results.values()]
@@ -252,6 +258,10 @@ class VidSynchronizer:
             corrected_starts, validation_status, message = self._crossValidate(
                 led_starts, audio_starts
             )
+            logger.debug(f'Cross-validation result for {daet}')
+            logger.debug(f'\t{corrected_starts=}')
+            logger.debug(f'\t{validation_status=}')
+            logger.debug(f'\t{message=}')
             
             # determine overall status
             if validation_status is None:
@@ -260,6 +270,7 @@ class VidSynchronizer:
                 status = 'failed'
             else:
                 status = 'warning'
+            logger.debug(f'{status=}')
             
             # create sync config if successful
             config_path = None
@@ -318,10 +329,17 @@ class VidSynchronizer:
     
                     logger.debug(f'Starting detection {str(vid_path)=}, {roi=}, {self.config.led_threshold=}, \
                         {led_color=}, {str(sync_detection_path)=}')
-                    start_frame = SyncLED.find_start_frame(
-                        str(vid_path), roi, self.config.led_threshold, 
-                        led_color, str(sync_detection_path)
-                    )
+                    
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore", 
+                            message="Starting a Matplotlib GUI outside of the main thread"
+                        )
+                        start_frame = SyncLED.find_start_frame(
+                            str(vid_path), roi, self.config.led_threshold, 
+                            led_color, str(sync_detection_path)
+                        )
+
                     led_starts.append(start_frame)
                     logger.info(f'Detection found LED on frame {start_frame}')
                     
@@ -333,15 +351,29 @@ class VidSynchronizer:
     
     def _crossValidate(self, led_starts: list[int | None], 
                     audio_starts: list[int]) -> tuple[list[int | None]| None, Optional[int], str]:
-        """Cross-validate LED and audio sync results"""
-        if not audio_starts or len(led_starts) != len(audio_starts):
-            return led_starts, -1, "Audio sync data unavailable"
+        """Cross-validate LED and audio sync results
+        returns:
+        - corrected_starts: tuple[int|none], or single None if failed
+        - validation_status: None if success, <0 failed, >=0 if warning
+        - message: str describing the result
+        """
+        logger.debug(f'Cross-validating: LED {led_starts}, Audio {audio_starts}')
+        if not audio_starts:
+            return led_starts, -1, "No audio start info for cross-validation, used LED starts"
+        if len(led_starts) != len(audio_starts):
+            return led_starts, -1, "LED and audio start lists length mismatch, used LED starts"
         
         # find valid LED detections
         valid_indices = [i for i, start in enumerate(led_starts) 
                         if start is not None and start != -1]
         
+        # shows "valid led detections counted: [111, ---, 333, 444]", etc
+        displayed_led_dets = [str(led_starts[i]) if i in valid_indices else '---' 
+                              for i in range(len(led_starts))]
+        logger.debug(f'Valid LED detections counted: {displayed_led_dets}')
+        
         if not valid_indices:
+            logger.debug('None of the LED detections are valid')
             # all LED detections failed, use audio sync with default offset
             default_offset = 0  # or some reasonable default
             corrected = [default_offset + audio_start if audio_start is not None else None 
@@ -353,8 +385,8 @@ class VidSynchronizer:
                 min_start = min(valid_corrected)
                 if min_start < 1:
                     shift = 1 - min_start
-                    corrected = [s + shift if s is not None else None for s in corrected]
-            
+                    corrected = [s + shift if s is not None else None for s in corrected] 
+         
             return corrected, 1, "All LED detection failed, using audio sync"
         
         # calculate median offset from valid detections
@@ -363,10 +395,13 @@ class VidSynchronizer:
             if audio_starts[i] is not None and led_starts[i] is not None:
                 offsets.append(led_starts[i] - audio_starts[i]) #type:ignore
         
+        logger.debug(f'Calculated offsets from valid detections: {offsets}')
+        
         if not offsets:
             return led_starts, -1, "Cannot compute offset - no valid audio/LED pairs"
         
         median_offset = sorted(offsets)[len(offsets) // 2]
+        logger.debug(f'Median offset calculated: {median_offset}')
         
         # validate and correct
         corrected_starts = led_starts.copy()
@@ -378,6 +413,7 @@ class VidSynchronizer:
                 continue
                 
             expected = median_offset + audio_start
+            deviation = 0
             
             if led_start is None or led_start == -1:
                 # fill missing with audio-based estimate
@@ -389,6 +425,9 @@ class VidSynchronizer:
                 if deviation > self.config.cross_validation_threshold:
                     corrected_starts[i] = expected
                     large_deviations += 1
+
+            logger.debug(f'Cam {i+1}: {led_start=}, {audio_start=}, {expected=},' \
+                          f' deviation={deviation if led_start is not None and led_start != -1 else "N/A"}')
         
         # determine status
         if large_deviations >= 2:
@@ -403,8 +442,29 @@ class VidSynchronizer:
         message = "Cross-validation successful"
         if message_parts:
             message += f" ({', '.join(message_parts)})"
+
+        # final pass so that no start is below 1
+        if all(s is not None for s in corrected_starts):
+            corrected_starts = self._ensureNoSubzero(corrected_starts)  #type:ignore
+        else:
+            logger.warning('Something is wrong with sync validation logic, see None in corrected_starts')
         
-        return corrected_starts, None, message
+        return corrected_starts, None, message  #type:ignore
+        # need to fix typing annotation above
+    
+    def _ensureNoSubzero(self, starts: list[int]) -> list[int]:
+        """Ensure no start frame is below 1 by shifting all starts up if needed
+        Assumes no None values in starts"""
+        valid_starts = [s for s in starts if s is not None]
+        if not valid_starts:
+            return starts
+        
+        min_start = min(valid_starts)
+        if min_start < 1:
+            shift = 1 - min_start
+            starts = [s + shift for s in starts]
+        
+        return starts
 
     def _createSyncConfig(self, daet: DAET, vid_paths: list[Path], 
                          vid_set: list[int | None], starts: list[int | None]) -> Path:

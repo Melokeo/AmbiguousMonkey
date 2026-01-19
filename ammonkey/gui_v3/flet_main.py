@@ -1,8 +1,9 @@
 import flet as ft
 import logging
 from pathlib import Path
+from itertools import tee
 
-from ..core.expNote import get_xlsx_dates, iter_xlsx, ExpNote, DAET
+from ..core.expNote import iter_xlsx, xlsx_iter_to_dates, ExpNote, DAET
 from ..core.config import Config
 
 from . import landfill as lf
@@ -52,7 +53,7 @@ class AmmApp:
         self.lg = logging.getLogger(__name__)
         ch = logging.StreamHandler()
         ch.setFormatter(logging.Formatter('[GUI] %(name)s - %(levelname)s - %(message)s'))
-        self.lg.addHandler(ch)
+        # self.lg.addHandler(ch)
         self.lg.setLevel(logging.DEBUG)
 
     def setup_layout(self) -> None:
@@ -75,12 +76,10 @@ class AmmApp:
         )
 
         self.btn_scan = ft.IconButton(
-            # text='Scan',
             icon=ft.Icons.SEARCH
         )
 
         self.btn_run_all = ft.IconButton(
-            # text='Scan',
             icon=ft.Icons.PLAY_ARROW,
             on_click=self.on_run_all,
         )
@@ -168,8 +167,10 @@ class AmmApp:
         self.lg.info('Finished UI init')
 
     def update_notes_dropdown(self) -> None:
-        notes_paths = list(iter_xlsx(str(self.base_raw_root)))
-        notes_dates = get_xlsx_dates(str(self.base_raw_root))        # redundant!!!
+        xlsx_iter, xlsx_iter_1 = tee(iter_xlsx(str(self.base_raw_root), nesting_level=3))
+        notes_paths = list(xlsx_iter)
+        notes_dates = xlsx_iter_to_dates(xlsx_iter_1)
+        
         self.lg.debug(f'Acquired {len(notes_paths)=}, {len(notes_dates)=}')
 
         self.dropdown_notes.options = [
@@ -234,6 +235,10 @@ class AmmApp:
             self.pg.update()
 
         return
+    
+    def on_search_click(self, e:ft.ControlEvent) -> None:
+        self.lg.debug('on_search_click')
+        self.update_notes_dropdown()
     
     def unlock_tabs(self):
         '''

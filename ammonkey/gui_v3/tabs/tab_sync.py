@@ -11,7 +11,11 @@ class TabSync:
     def __init__(self, logger: logging.Logger) -> None:
         self.lg = logger
 
-        self.col_cams = ColCamCfgs(CamConfig())
+        cam_cfg = CamConfig()
+        self.col_cams = ColCamCfgs(cam_cfg, logger=self.lg)
+        self.lg.debug('Created ColCamCfgs for TabSync, cams addresses:')
+        for cam in cam_cfg.cams:
+            self.lg.debug(f'\t{id(cam)}')
 
         self.btn_check_all = ft.ElevatedButton(
             text='Check all ROIs',
@@ -66,16 +70,18 @@ class TabSync:
         )
         
         self.lg.debug('tab_sync is up')
-    
-    def on_setup_click(self, e: ft.ControlEvent):
-        self.lg.debug('on_setup_click')
+
+    def on_create_click(self, e: ft.ControlEvent):
+        self.vs = VidSynchronizer(notes=lf.note_filtered, cam_cfg=self.col_cams.cam_cfg)
+        self.lg.debug(self.vs)
 
     def on_check_all(self, e: ft.ControlEvent):
         self.lg.debug('on_check_all')
-
-    def on_create_click(self, e: ft.ControlEvent):
-        self.vs = VidSynchronizer(notes=lf.note_filtered)
-        self.lg.debug(self.vs)
+        if not hasattr(self, 'vs'):
+            self.lg.info('on_check_all: synchronizer not created')
+            self.on_create_click(e)
+            return
+        self.vs.checkRois()
 
     def on_set_all(self, e: ft.ControlEvent):
         if not hasattr(self, 'vs'):
@@ -83,13 +89,18 @@ class TabSync:
             self.on_create_click(e)
             return
         self.vs.setROI()
-        self.lg.debug(self.vs.cam_config.cams)
+        self.lg.debug(self.vs.cam_config.rois)
         self.lg.info('Updated ROIs')
 
     def on_sync_all(self, e: ft.ControlEvent):
 
         self.lg.debug('on_sync_all')
         self.lg.info('Starting sync all...')
+        
+        self.lg.info(f'Params:')
+        for cam in self.vs.cam_config.cams:
+            self.lg.info(f'\t{cam.name} at {id(cam)} ({cam.led_color})\tROI: {cam.roi})')
+
         self.syncing_row.visible = True
         # self.tab.badge = ft.Badge(small_size=10),
         self.tab.icon = ft.Icons.FIRE_EXTINGUISHER

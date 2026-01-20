@@ -3,8 +3,8 @@
 projects-path: P:\projects\monkeys\Chronic_VLL
 
 animals:
-  pici: P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025
-  fusillo: P:\projects\monkeys\Chronic_VLL\DATA_RAW\Fusillo\2025
+  pici: P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici
+  fusillo: P:\projects\monkeys\Chronic_VLL\DATA_RAW\Fusillo
 
 cams:
   1:  # index matters!!
@@ -140,6 +140,14 @@ anipose-cfgs:
   Hand: config_hand.toml
   TS: config_arm.toml
   Pull: config_arm.toml
+
+anipose-libs:
+  arm:
+    path: '{home}/Documents/Python Scripts/calib history/arm4'
+    models: ['fus-arm', 'TS', 'Pull']
+  hand:
+    path: '{home}/Documents/Python Scripts/calib history/hand2'
+    models: ['Brkm', 'BBT', 'Hand']
 
 # will be loaded to global Task enum
 # !! Below doesn't work, because i need static enum definition for pylance.

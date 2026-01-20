@@ -18,6 +18,53 @@ if not cfg_path.exists():
 Config = None
 
 @dataclass
+class AniposeLibs:
+    '''
+    dict[str: dict]
+    inner dict structure:
+        {
+            'path': Path,
+            'models': list[str] (list of model keywords to wire to this lib)
+        }
+    '''
+    libs: dict[str, dict] = field(default_factory=dict)
+
+    @classmethod
+    def from_dicts(cls, dicts: dict[str, dict]) -> 'AniposeLibs':
+        libs_dict = {}
+        for name, d in dicts.items():
+            # check for correct fields
+            if name in libs_dict.keys():
+                lg.warning(f'Duplicate anipose lib name in config: {name}, overwriting previous entry.')
+            if not isinstance(d, dict):
+                lg.error(f'Anipose lib config for {name} is not a dict: {type(d)}. skipping entry.')
+                continue
+            required_fields = ['path', 'models']
+            if not all(k in d.keys() for k in required_fields):
+                lg.error(f'Anipose lib config for {name} missing required fields, plz check config {required_fields}')
+                continue
+
+            path: str = d.get('path', '')
+            
+            # fill allowed placeholders in path
+            if '{home}' in path:
+                path = path.format(home=str(Path.home()))
+            
+            libs_dict[name] = {
+                'path': Path(path),
+                'models': d.get('models', [])
+            }
+
+        return cls(libs=libs_dict)
+
+    def get_lib_path_for_key(self, key: str) -> Path | None:
+        '''return matching lib for given model key, first match'''
+        for lib, info in self.libs.items():
+            if key in info.get('models', []):
+                return Path(info.get('path', ''))
+        return None
+
+@dataclass
 class _Config:
     projects_path: Path
     animals: list[str]
@@ -31,6 +78,7 @@ class _Config:
     dlc_combos: dict[str, dict]
     anipose_env: str
     anipose_cfgs: dict[str, str]
+    anipose_libs: AniposeLibs
 
     def validate(self) -> tuple[bool, str]:
         missing = []
@@ -54,6 +102,8 @@ class _Config:
             missing.append("anipose_env (empty)")
         if not self.anipose_cfgs:
             missing.append("anipose_cfgs (default {})")
+        if not self.anipose_libs:
+            missing.append("anipose_libs (default {})")
 
         if missing:
             msg = "Missing or default fields:\n" + "\n".join(f" - {m}" for m in missing)
@@ -97,6 +147,7 @@ with open(cfg_path, 'r') as cfg:
                 dlc_combos= cfg_data.get('dlc-process-combos', {}),
                 anipose_env=cfg_data.get('anipose-conda-env', ''),
                 anipose_cfgs=cfg_data.get('anipose-cfgs', {}),
+                anipose_libs=AniposeLibs.from_dicts(cfg_data.get('anipose-libs', {}))
             )
         except Exception as e:
             lg.error(f'Unexpected error occurred when creating Config obj: {e}')

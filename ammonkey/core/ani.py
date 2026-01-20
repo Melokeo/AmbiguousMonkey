@@ -34,9 +34,6 @@ def getH5Rename(file_name:Path | str, stem_only:bool=False) -> str:
         file_name
     )
 
-def insertModelToH5Name(file_name:Path | str) -> str: 
-    return ''
-
 @dataclass
 class CalibLib:
     lib_path: Path

@@ -20,8 +20,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 dlc_postfix_pattern = re.compile(r'DLC_resnet\d+_[^_]+shuffle\d+_\d+(?:_filtered)?\.h5$')
-LIB_HAND = Path.home() / 'Documents/Python Scripts/calib history/arm4'
-LIB_ARM  = Path.home() / 'Documents/Python Scripts/calib history/hand2'
+libs = Config.anipose_libs
 
 def getH5Rename(file_name:Path | str, stem_only:bool=False) -> str:
     '''get rid of dlc postfix'''
@@ -65,18 +64,20 @@ class CalibLib:
             pass
             #TODO implement first-run 
 
-    def lookUp(self, date: int) -> Path | None:
-        """look up calib file for given date, with fallback to closest prior date"""
+    def lookUp(self, date: int) -> tuple[int | None, list[Path] | None]:
+        """look up calib file for given date, with fallback to closest prior date.
+        Returns (date_used, list_of_calibs) or (None, None) if not found.
+        """
         calibs = self.lib.get(date)
         if calibs: 
-            return calibs[0]
+            return (date, calibs)
         else:
             closest = self.getClosestBackward(date)
             if closest:
                 logger.warning(f'calibLib: used fallback calib for {date} <- {closest}')
-                return self.lib[closest][0]
+                return (closest, self.lib[closest])
             else:
-                return None
+                return (None, None)
         
     def getClosestBackward(self, target: int) -> int | None:
         """get closest date in the lib keys for given target"""
@@ -134,12 +135,13 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
     
     def getCalibLib(self, model_set_name:str) -> CalibLib:
         '''here maps model set to the calibration lib'''
-        if 'Brkm' in model_set_name or 'BBT' or 'Hand' in model_set_name:
-            return CalibLib(LIB_HAND)
-        elif 'TS' in model_set_name or 'Pull' in model_set_name:
-            return CalibLib(LIB_ARM)
+        # match model set name to calib lib, using AniposeLibs
+        msn_lower = model_set_name.lower()
+        path = libs.get_lib_path_for_key(msn_lower)
+        if path:
+            return CalibLib(path)
         else:
-            raise ValueError(f'Cannot get calib lib for unrecognized set: {model_set_name}')
+            raise ValueError(f'Cannot get calib lib for unrecognized set: {model_set_name}, plz update config per your setup')
 
     def getCfgFile(self) -> Path:
         '''get cfg based on model_set_name'''
@@ -156,14 +158,45 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         return cfg_path / 'config.toml'
     
     def getCalibFile(self) -> Path | None:
-        '''determine calib file from note, with calib library as fallback'''
-        calib = self.calib_lib.lookUp(int(self.note.date))
-        if calib is None: # check if this note carries calib itself
+        '''determine calib file from note, with calib library as fallback.
+        Here it should be the single place that determines calib files anywhere else.
+        So if there is an update to calib files by processing, call this again.
+        '''
+        date, calibs = self.calib_lib.lookUp(int(self.note.date))
+        if not calibs: # check if this note carries calib recordings itself
             if not self.note.has_calib:
                 raise ValueError(f'AniposeProcessor: cannot find this date\'s calib file {self.note.date}')
-            return None
+            else:
+                # calib file should be updated using note's own calib recording
+                return None
         else:
-            return calib
+            if str(date) == self.note.date:
+                logger.debug(f'Calib files match curr date')
+                # now determine exactly which calib file, when multiple exist for same date
+                note_calibs = [str(daet) for daet in self.note.getCalibs()]
+                if len(note_calibs) == 1:
+                    for calib in calibs:
+                        if note_calibs[0].lower() in calib.stem.lower():
+                            return calib
+                    logger.debug(f'Date {date} found stored calibs {calibs}, but no target {note_calibs[0]}, returned None')
+                    return None # this calib wasn't processed and put to lib yet.
+                else:  
+                    # multiple calibs in note, get first note_calib that's in calibs
+                    final_calib = None
+                    for note_calib in note_calibs:
+                        for calib in calibs:
+                            if note_calib.lower() in calib.stem.lower():
+                                final_calib = calib
+                    if final_calib:
+                        logger.warning(f'Multiple calibs for date {date}, using first match by default ({final_calib.name})')
+                        return final_calib
+                    else:
+                        logger.warning(f'Multiple calibs for date {date}, but no match found in stored calibs')
+                        return None
+            else:
+                final_calib = calibs[0]
+                logger.warning(f'Calib file date fallback: {self.note.date} <- {date}({final_calib.name})')
+                return final_calib
         
     def runPipeline(self) -> bool:
         try:

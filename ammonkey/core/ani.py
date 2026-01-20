@@ -389,9 +389,10 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
     
     def triangulateCLI(self) -> None:
         '''CLI anipose'''
+        disk = os.path.splitdrive(str(self.ani_root_path))[0]
         cmd = [
             'conda', 'activate', self.conda_env, '&&',
-            'P:', '&&',
+            f'{disk}', '&&',
             'cd', str(self.ani_root_path), '&&',
             'anipose', 'triangulate'
         ]

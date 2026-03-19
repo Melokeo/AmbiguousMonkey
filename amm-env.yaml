@@ -27,7 +27,8 @@ dependencies:
   - pip:
     - tensorflow==2.10.*
     - deeplabcut==3.0.0rc7
-    - anipose
+    # patched anipose for some features
+    - anipose @ git+https://github.com/Melokeo/anipose.git@main
     - ammonkey
     - opencv-python==4.11.0.86
     - numpy==1.26.4

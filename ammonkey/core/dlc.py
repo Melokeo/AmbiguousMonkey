@@ -354,7 +354,7 @@ def modelPreset(preset_name:str) -> DLCModel:
 available_models = [k for k in Config.dlc_models.keys()]
 available_dp = [k for k in Config.dlc_combos.keys()]
 
-dp_task = {
+dp_task = {     # dict[combo_name, Task | list[Task]]
     'TS-LR':     Task.TS,
     'Pull-LR':   Task.PULL,
     'Brkm':      Task.BRKM,

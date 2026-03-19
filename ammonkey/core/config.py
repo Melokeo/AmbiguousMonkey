@@ -93,7 +93,7 @@ class AniposeLibs:
 
 @dataclass
 class _Config:
-    projects_path: Path
+    projects_path: Path # actually never used cuz each animal has its own path configured
     animals: list[str]
     animal_paths: dict[str, str]
     cam_settings: dict[int, dict] 
@@ -173,6 +173,15 @@ class _Config:
     # util methods
     def has_animal(self, animal: str) -> bool:
         return animal.lower() in [a.lower() for a in self.animals]
+    
+    def get_cam_groups(self) -> set[str]:
+        '''return all cam group names'''
+        groups = set()
+        for cam_info in self.cam_settings.values():
+            group = cam_info.get('group', None)
+            if group:
+                groups.add(group)
+        return groups
 
 def validate_task_match(tasks: list, task_kw: dict[str, list[str]]) -> bool:
     keys = list(task_kw.keys())

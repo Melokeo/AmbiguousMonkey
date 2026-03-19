@@ -95,11 +95,16 @@ class TabDlc:
         note_tasks = set(lf.note_filtered.getAllTaskTypes())
         note_tasks.discard(Task.CALIB)
         target_task = dp_task.get(dp_name, None)
+        
         self.lg.debug(f'{note_tasks=}, {target_task=}')
         if target_task is None:
             raise ValueError(f'check_model_compatibility: {dp_name} is not valid to check')
+            
+        if isinstance(target_task, list):
+            target_task_set = set(target_task)
+            return note_tasks.issubset(target_task_set)
         else:
-            return set([target_task]) == note_tasks
+            return note_tasks == {target_task}
 
     def on_run_dlc_click(self, e: ft.ControlEvent):
         self.lg.debug(f'on_run_dlc_click {e}')

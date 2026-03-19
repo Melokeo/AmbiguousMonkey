@@ -67,8 +67,7 @@ cv = [
     "qdarkstyle",
     "napari",
     "napari_deeplabcut",
-    # use my anipose fork for export range feature & bug fixes
-    "anipose @ git+https://github.com/Melokeo/anipose.git@main",
+    "anipose",
 ]
 dev = [
     "pytest",

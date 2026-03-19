@@ -1,10 +1,13 @@
 name: CI/CD for ammonkey
-
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'ammonkey/**'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'ammonkey/**'
   release:
     types: [published]
 

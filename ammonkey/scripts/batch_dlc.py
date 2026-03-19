@@ -16,8 +16,12 @@ from ammonkey import (
     ExpNote, DAET, Path,
     Task, iter_notes, 
     initDlc, createProcessor_Pull,
-    createProcessor_BBT, createProcessor_Brkm, createProcessor_TS
+    createProcessor_BBT, createProcessor_Brkm, createProcessor_TS,
+    createProcessor_Pull_Hand,
+    set_colored_logger
 )
+from ammonkey.dask.dask_factory import create_dlc_tasks
+from ammonkey.dask.dask_scheduler import DaskScheduler
 import re
 from ammonkey.utils.silence import silence
 import logging
@@ -26,21 +30,26 @@ import os
 import itertools
 from typing import Iterator
 
-lg = logging.getLogger(__name__)
-lg.setLevel(logging.DEBUG)
+lg = set_colored_logger(__name__)
 
 p = r'P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici\2025'
 p = Path(p)
 
-target_task = Task.BBT
-dp_function = createProcessor_BBT
+target_task = Task.BRKM
+dp_function = createProcessor_Pull_Hand
+dp_name = 'Pull-Hand'
 
 re_model = re.compile(r'^Pull-LR-\d{7,8}_4480$')
 re_model = re.compile(r'^BBT-\d{7,8}_5608$')
+re_model = re.compile(r'^Brkm-\d{7,8}_4026$')
+re_model = re.compile(r'^Brkm-\d{7,8}_4026$')
+re_model = re.compile(r'^Pull-Hand-\d{7,8}_3339$')
 group_sub_dirs = ['L', 'R']
 group_sub_dirs = ['R']
 
-cutoff_date = 20250315
+cutoff_date = 20250225
+
+USE_DASK = True
 
 def cleanSkipFile(p:str | Path):
     P = Path(p)
@@ -60,13 +69,13 @@ def is_processed_by_model(
 ) -> bool:
     synced_vid_dir = Path(synced_vid_dir)
     cleanSkipFile(synced_vid_dir)
-    if all(
+    """if all(
         [
             (synced_vid_dir / s / '.skipDLC').exists() 
             for s in group_sub_dirs
         ]
     ):      # legacy skip detection
-        return True
+        return True"""
     
     if not (dlc_dir := synced_vid_dir / 'DLC').exists():
         return False
@@ -124,6 +133,9 @@ def scan_dlc_unprocessed(note_iterator: Iterator[ExpNote]) -> list[DAET]:
     return need_dlc
 
 def execute_batch_dlc(note_iterator: Iterator[ExpNote], need_dlc: list[DAET]) -> None:
+    if USE_DASK: 
+        global ds, futs
+
     dates_need_dlc = {daet.date for daet in need_dlc}
     for note in note_iterator:
             lg.info(f'Stepping {note}')
@@ -135,26 +147,48 @@ def execute_batch_dlc(note_iterator: Iterator[ExpNote], need_dlc: list[DAET]) ->
             if not note_filtered.checkSanity():
                 lg.error(f'Skipped {note_filtered.date}: sanity check failed')
                 continue
+            
+            if USE_DASK:
+                tasks = create_dlc_tasks(
+                    note=note_filtered,
+                    processor_type=dp_name,
+                )
+                futs |= ds.submit_tasks(tasks)
 
-            dp = dp_function(note_filtered)
+            else:
+                dp = dp_function(note_filtered)
 
-            lg.info(f'Executing DLC on {note_filtered}')
-            lg.info(f'Including: {note_filtered.daets}')
+                lg.info(f'Executing DLC on {note_filtered}')
+                lg.info(f'Including: {note_filtered.daets}')
 
-            dlc_results = dp.batchProcess()
-            lg.info(dlc_results)
+                dlc_results = dp.batchProcess()
+                lg.info(dlc_results)
 
 def main() -> None:
     notes_iterator = iter_notes(Path(p))
-    ni0, ni1 = itertools.tee(notes_iterator, 2)
+    ni0, ni1, ni2 = itertools.tee(notes_iterator, 3)
     need_dlc = scan_dlc_unprocessed(ni0)
 
     print('='*20, 'Need dlc:', '='*20)
     for daet in need_dlc:
         print(f'{daet}')
 
-    initDlc()
-    execute_batch_dlc(ni1, need_dlc)
+    if not USE_DASK:
+        initDlc()
+        execute_batch_dlc(ni1, need_dlc)
+    else:
+        global ds, futs
+        futs = {}
+        ds = DaskScheduler()
+        execute_batch_dlc(ni1, need_dlc)
+        
+        results = ds.monitor_progress(futs)
+        print('\033[7mDASK TASKS FINISHED\033[0m')
+        for i, r in enumerate(results):
+            print(f"{i:>4}. [{r.get('status')}] {r.get('task_id')} ({r.get('type')}): {r.get('message')}")
+
+
+
 
 if __name__  == '__main__':
     main()

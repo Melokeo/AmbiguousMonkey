@@ -1,14 +1,10 @@
-# ammonkey configs. modify when there is new experiment, new model, or new animals
-
 projects-path: P:\projects\monkeys\Chronic_VLL
-
 animals:
   pici: P:\projects\monkeys\Chronic_VLL\DATA_RAW\Pici
   fusillo: P:\projects\monkeys\Chronic_VLL\DATA_RAW\Fusillo
-
 cams:
-  1:  # index matters!!
-    name: cam1 # whatever name, it won't be used in code after all
+  1:
+    name: cam1
     index: 1
     group: L
     led_color: Y
@@ -27,17 +23,16 @@ cams:
     group: R
     led_color: G
     roi: [864, 254, 131, 158]
-    header_in_note: "Camera files (3 RR)"
+    header_in_note: Camera files (3 RR)
   4:
     name: cam4
     index: 4
     group: R
     led_color: G
     roi: [1007, 285, 171, 143]
-    header_in_note: "Camera files (4 RL)"
-
-ffmpeg: 'C:\ffmpeg\bin\ffmpeg.exe'    # or simply "ffmpeg" if installed in conda
-ffprobe: 'C:\ffmpeg\bin\ffprobe.exe'
+    header_in_note: Camera files (4 RL)
+ffmpeg: C:\ffmpeg\bin\ffmpeg.exe
+ffprobe: C:\ffmpeg\bin\ffprobe.exe
 sync-aud:
   snr-threshold: 3.2
   peak-threshold: 1.16
@@ -47,9 +42,7 @@ sync-led:
   led-persist-sec: 0.033
   led-persist-tolerance-sec: 0
   led-duration-range: [1.0, 1.0]
-
 dlc-models:
-  # pici
   TS-L:
     dir-name: TS-LJan30
     cfg-path: D:\DeepLabCut\TS-L-shaved-N\config.yaml
@@ -85,8 +78,6 @@ dlc-models:
     cfg-path: D:\DeepLabCut\BBT\config.yaml
     iteration: 3
     shuffle: 1
-  
-  # fusillo
   fus-arm-L:
     dir-name: fus-armSep2
     cfg-path: D:\DeepLabCut\FUSILLO\fus-arm-L\config.yaml
@@ -107,9 +98,11 @@ dlc-models:
     cfg-path: D:\DeepLabCut\FUSILLO\fus-arm-R\config.yaml
     iteration: 0
     shuffle: 7
-
-# combination of models during analysis
-# keys: CamGroup enum values; values: keys of dlc-models as above.
+  bbt-test:
+    dir-name: piciMar19
+    cfg-path: D:\DeepLabCut\bbt-ttt\config.yaml
+    iteration: 2
+    shuffle: 1
 dlc-process-combos:
   TS-LR:
     L: TS-L
@@ -129,10 +122,7 @@ dlc-process-combos:
   fus-arm-it7:
     L: fus-arm-L7
     R: fus-arm-R7
-
-anipose-conda-env: amm #anipose-3d
-
-# keyword-based assignment of anipose config files, order sensitive!
+anipose-conda-env: amm
 anipose-cfgs:
   fus-arm: config_arm.toml
   Brkm: config_hand.toml
@@ -140,30 +130,10 @@ anipose-cfgs:
   Hand: config_hand.toml
   TS: config_arm.toml
   Pull: config_arm.toml
-
 anipose-libs:
   arm:
-    path: '{home}/Documents/Python Scripts/calib history/arm4'
-    models: ['fus-arm', 'TS', 'Pull']
+    path: C:\Users\mkrig\Documents\Python Scripts\calib history\arm4
+    models: [fus-arm, TS, Pull]
   hand:
-    path: '{home}/Documents/Python Scripts/calib history/hand2'
-    models: ['Brkm', 'BBT', 'Hand']
-
-# will be loaded to global Task enum
-# !! Below doesn't work, because i need static enum definition for pylance.
-# if you want to modify, go to ammonkey/core/daet.py and make changes there.
-# tasks:
-#   ALL: 1
-#   TS: 2
-#   BBT: 3
-#   BRKM: 4
-#   PULL: 5
-#   CALIB: 6
-# 
-# task-keywords:
-#   BBT: ["bbt"]
-#   BRKM: ["brkm", "brnk", "kman"]
-#   PULL: ["pull", "puul"]
-#   TS: ["touchscreen", "touch screen", "ts"]
-#   CALIB: ["calib"]
-#   ALL: ['']
+    path: C:\Users\mkrig\Documents\Python Scripts\calib history\hand2
+    models: [Brkm, BBT, Hand]

@@ -87,8 +87,7 @@ class TabDlc:
             return
         
         if not self.check_model_compatibility(dp_name=dp):
-            self.lg.warning(f'Model {dp} is not intended for this data, or\
-                             multiple task types are included. plz confirm selection')
+            self.lg.warning(f'Model {dp} is not intended for this data, or multiple task types are included. plz confirm selection')
 
         self.lg.info(f'Updated dlc processor {dp}')
 

@@ -155,6 +155,7 @@ class TabAnipose:
             return
         
         self.lg.info('Starting anipose...')
+        self.lg.debug(f'This note has calibs: {[str(daet) for daet in lf.note_filtered.getCalibs()]}')
         self._ui_processing_stat(True)
 
         #TODO this logic could be refactored
@@ -164,10 +165,14 @@ class TabAnipose:
             self.ap.setupRoot()
             self.ap.setupCalibs()
 
+            self.lg.debug('Finished setup')
             self.lg.debug('-calibrateCLI-')
+
             self.ap.calibrateCLI()
             self.lg.debug('-calibrateCLI: done-')
             self._update_ani_info()
+
+            self.lg.debug(f'Final calib file after calibration: {self.ap.getCalibFile()}')
 
             self.ap.batchSetup()
             self.lg.debug('-Trangulate CLI-')

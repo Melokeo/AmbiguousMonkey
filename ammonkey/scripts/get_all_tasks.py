@@ -10,7 +10,7 @@ import csv
 from ammonkey import (
     ExpNote, DAET, Path,
     Task, iter_notes, 
-    initDlc, createProcessor_Pull,
+    initDlc
 )
 from ammonkey.utils.silence import silence
 

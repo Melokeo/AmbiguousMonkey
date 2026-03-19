@@ -17,6 +17,25 @@ if not cfg_path.exists():
 
 Config = None
 
+cfg_name_map = {
+    'projects-path': 'projects_path',
+    'animals': 'animal_paths',
+    'cams': 'cam_settings',
+    'ffmpeg': 'ffmpeg_path',
+    'ffprobe': 'ffprobe_path',
+    'sync-aud': 'sync_aud',
+    'sync-led': 'sync_led',
+    # 'tasks': 'tasks',
+    # 'task-keywords': 'task_kw',
+    'dlc-models': 'dlc_models',
+    'dlc-process-combos': 'dlc_combos',
+    'anipose-conda-env': 'anipose_env',
+    'anipose-cfgs': 'anipose_cfgs',
+    'anipose-libs': 'anipose_libs',
+}
+cfg_name_map_rev = {v: k for k, v in cfg_name_map.items()}
+
+
 @dataclass
 class AniposeLibs:
     '''
@@ -44,14 +63,19 @@ class AniposeLibs:
                 lg.error(f'Anipose lib config for {name} missing required fields, plz check config {required_fields}')
                 continue
 
-            path: str = d.get('path', '')
+            path = str(d.get('path', ''))
             
             # fill allowed placeholders in path
             if '{home}' in path:
                 path = path.format(home=str(Path.home()))
+
+            path = Path(path)
+            if not path.exists():
+                lg.error(f'Anipose lib path for {name} does not exist: {path}. skipping entry.')
+                continue
             
             libs_dict[name] = {
-                'path': Path(path),
+                'path': path,
                 'models': d.get('models', [])
             }
 
@@ -61,6 +85,9 @@ class AniposeLibs:
         '''return matching lib for given model key, first match'''
         for lib, info in self.libs.items():
             if key in info.get('models', []):
+                return Path(info.get('path', ''))
+            elif key in [m.lower() for m in info.get('models', [])]:
+                lg.warning(f'Key case mismatch for anipose lib model key: {key}')
                 return Path(info.get('path', ''))
         return None
 
@@ -72,6 +99,8 @@ class _Config:
     cam_settings: dict[int, dict] 
     ffmpeg_path: str
     ffprobe_path: str
+    sync_aud: dict
+    sync_led: dict
     # tasks: dict[str, int]
     # task_kw: dict[str, list[str]]
     dlc_models: dict[str, dict]
@@ -98,6 +127,10 @@ class _Config:
             missing.append("dlc_models (default {})")
         if not self.dlc_combos:
             missing.append("dlc_combos (default {})")
+        if not self.sync_aud:
+            missing.append("sync_aud (default {})")
+        if not self.sync_led:
+            missing.append("sync_led (default {})")
         if not self.anipose_env:
             missing.append("anipose_env (empty)")
         if not self.anipose_cfgs:
@@ -109,6 +142,37 @@ class _Config:
             msg = "Missing or default fields:\n" + "\n".join(f" - {m}" for m in missing)
             return False, msg
         return True, "All config fields validated successfully."
+    
+    def save(self) -> None:
+        '''save config back to file. comments will be lost.
+        can use ruamel.yaml if needed in the future'''
+        def flow_list_representer(dumper, data):
+            return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+        yaml.add_representer(list, flow_list_representer)
+
+        try:
+            with open(cfg_path, 'w') as f:
+                d = self.__dict__.copy()
+                d['projects_path'] = str(self.projects_path)
+                d['anipose_libs'] = {
+                    k: {'path': str(v['path']), 'models': v['models']} 
+                    for k, v in self.anipose_libs.libs.items()
+                }
+                # apply name mapping
+                d = {cfg_name_map_rev.get(k, k): v for k, v in d.items()}
+
+                yaml.dump(
+                    d, f, 
+                    default_flow_style=False, 
+                    sort_keys=False)
+
+            lg.info(f'Config saved to {cfg_path}')
+        except Exception as e:
+            lg.error(f'Failed to save config: {e}')
+
+    # util methods
+    def has_animal(self, animal: str) -> bool:
+        return animal.lower() in [a.lower() for a in self.animals]
 
 def validate_task_match(tasks: list, task_kw: dict[str, list[str]]) -> bool:
     keys = list(task_kw.keys())
@@ -141,6 +205,8 @@ with open(cfg_path, 'r') as cfg:
                 cam_settings=cfg_data.get('cams', {}),
                 ffmpeg_path=cfg_data.get('ffmpeg', ''),
                 ffprobe_path=cfg_data.get('ffprobe', ''),
+                sync_aud=cfg_data.get('sync-aud', {}),
+                sync_led=cfg_data.get('sync-led', {}),
                 # tasks=tasks,
                 # task_kw=task_kw,
                 dlc_models=cfg_data.get('dlc-models', {}),
@@ -168,4 +234,11 @@ if __name__ == '__main__':
     handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
     lg.addHandler(handler)
     lg.setLevel(logging.DEBUG)
-    print(Config)  
+    print(Config) 
+
+    from pprint import pp
+    pp(Config.__dict__) 
+
+    if input('run save: ') == 'y':
+        Config.save()
+        lg.info('saved')

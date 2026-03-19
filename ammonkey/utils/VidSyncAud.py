@@ -54,7 +54,7 @@ def extract_audio(video_path, sample_rate=48000, duration=30, start=0):
         lg.error(result.stderr)
     audio, sr = librosa.load(temp_audio, sr=sample_rate)
     os.remove(temp_audio)
-    lg.info(f'Extracted audio from {os.path.basename(video_path)}')
+    lg.debug(f'Extracted audio from {os.path.basename(video_path)}')
     return audio, sr
 
 def compute_energy_envelope(audio, sr, hop_length=128):

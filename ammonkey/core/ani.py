@@ -491,7 +491,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
     
 # util func
 def runAnipose(note:ExpNote, model_set_name:str):
-    logger.setLevel(logging.INFO)
+    # logger.setLevel(logging.INFO)
 
     ap = AniposeProcessor(note, model_set_name)
     ap.setupRoot()

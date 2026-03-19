@@ -97,9 +97,9 @@ class TabSync:
         self.lg.debug('on_sync_all')
         self.lg.info('Starting sync all...')
         
-        self.lg.info(f'Params:')
+        self.lg.debug(f'Params:')
         for cam in self.vs.cam_config.cams:
-            self.lg.info(f'\t{cam.name} at {id(cam)} ({cam.led_color})\tROI: {cam.roi})')
+            self.lg.debug(f'\t{cam.name} at {id(cam)} ({cam.led_color})\tROI: {cam.roi})')
 
         self.syncing_row.visible = True
         # self.tab.badge = ft.Badge(small_size=10),

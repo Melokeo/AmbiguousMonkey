@@ -55,7 +55,7 @@ ammonkey = "ammonkey.__main__:main"
 gui = [
     "flet~=0.28.3",
 ]
-da = [
+cv = [
     "deeplabcut==3.0.0rc7",
     "tensorflow==2.10.*",
     "tensorpack",

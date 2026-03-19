@@ -32,7 +32,7 @@ dependencies:
     - ammonkey
     - opencv-python==4.11.0.86
     - numpy==1.26.4
-    - flet
+    - flet==0.28.3 # 0.8* ones updated interfaces so dont use that
     - dask
     - pathlib
     - dask==2025.5.1

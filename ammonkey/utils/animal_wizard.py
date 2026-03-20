@@ -21,10 +21,11 @@ MODEL_YARD = r'D:\DeepLabCut'
 import sys
 import msvcrt
 
-def tui_select(options: list[str], prompt: str = "Select an option:") -> str:
+def tui_select(options: list[str], prompt: str = "Select:") -> str:
     from rich.live import Live
     selected = 0
-    with Live(auto_refresh=False) as live:
+    # transient=True will clear the Live output from the terminal entirely when the context manager exits.
+    with Live(auto_refresh=False, transient=True) as live:
         while True:
             text = f"[cyan]{prompt}[/cyan]\n"
             for i, opt in enumerate(options):
@@ -59,7 +60,7 @@ def tui_multiselect(options: list[tuple[str, str]], prompt: str = "Select option
     selected_indices = set()
     focused = 0
     
-    with Live(auto_refresh=False) as live:
+    with Live(auto_refresh=False, transient=True) as live:
         while True:
             table = Table(show_header=False, box=None, padding=(0, 1))
             table.add_column("Focus", justify="center", width=2)
@@ -147,33 +148,35 @@ def add_animal() -> bool:
         console.print(f"[bold yellow]{animal_name!r}[/bold yellow] already exists in config.")
         return False
 
-    animal_path_str = Prompt.ask(
-        f"[cyan]Path to animal[/cyan] [dim](.../project/DATA_RAW/{animal_name})[/dim]"
-    )
-    if not animal_path_str:
-        console.print("[bold red]Error:[/bold red] Path cannot be empty.")
-        return False
-    animal_path_str = animal_path_str.strip('"')
-
-    try:
-        animal_path = Path(animal_path_str)
-    except ValueError as e:
-        console.print(f"[bold red]Error:[/bold red] Invalid path: {e}")
-        return False
-
-    if not animal_path.exists():
-        console.print(f"[bold yellow]Warning:[/bold yellow] Path does not exist: [bold]{animal_path}[/bold]")
-        return False
-
-    if (not animal_path.parent.name == 'DATA_RAW' or
-            not animal_path.name.lower() == animal_name.lower()):
-        console.print(
-            f"[bold yellow]Warning:[/bold yellow] Path should be like "
-            f"[bold].../project/DATA_RAW/{animal_name}[/bold], "
-            f"but got: [bold]{animal_path}[/bold]"
+    while True:
+        animal_path_str = Prompt.ask(
+            f"[cyan]Path to animal[/cyan] [dim](.../project/DATA_RAW/{animal_name})[/dim]"
         )
-        if not Confirm.ask("Continue?"):
-            return False
+        if not animal_path_str:
+            console.print("[bold red]Error:[/bold red] Path cannot be empty.")
+            continue
+        animal_path_str = animal_path_str.strip('"')
+
+        try:
+            animal_path = Path(animal_path_str)
+        except ValueError as e:
+            console.print(f"[bold red]Error:[/bold red] Invalid path: {e}")
+            continue
+
+        if not animal_path.exists():
+            console.print(f"[bold yellow]Warning:[/bold yellow] Path does not exist: [bold]{animal_path}[/bold]")
+            continue
+
+        if (not animal_path.parent.name == 'DATA_RAW' or
+                not animal_path.name.lower() == animal_name.lower()):
+            console.print(
+                f"[bold yellow]Warning:[/bold yellow] Path should be like "
+                f"[bold].../project/DATA_RAW/{animal_name}[/bold], "
+                f"but got: [bold]{animal_path}[/bold]"
+            )
+            if not Confirm.ask("Continue?"):
+                continue
+        break
 
     animal_name = animal_name.lower()
     Config.animals.append(animal_name)

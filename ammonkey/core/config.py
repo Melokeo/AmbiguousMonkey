@@ -82,6 +82,18 @@ class AniposeLibs:
         return cls(libs=libs_dict)
 
     def get_lib_path_for_key(self, key: str) -> Path | None:
+        '''return matching lib that is contained as substr in given model key, first match'''
+        for lib, info in self.libs.items():
+            models = info.get('models', [])
+            if not models or not isinstance(models, list):
+                lg.error(f'Anipose lib {lib} has invalid models field (should be list): {models}. skipping.')
+                continue
+            for m in models:
+                if m.lower() in key.lower():
+                    return Path(info.get('path', ''))
+        return None
+    
+    def get_lib_path_for_key_exact(self, key: str) -> Path | None:
         '''return matching lib for given model key, first match'''
         for lib, info in self.libs.items():
             if key in info.get('models', []):

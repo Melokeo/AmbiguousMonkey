@@ -133,8 +133,10 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         else:
             return info
     
-    def getCalibLib(self, model_set_name:str) -> CalibLib:
+    @staticmethod
+    def getCalibLib(model_set_name:str) -> CalibLib:
         '''here maps model set to the calibration lib'''
+        breakpoint()
         # match model set name to calib lib, using AniposeLibs
         msn_lower = model_set_name.lower()
         path = libs.get_lib_path_for_key(msn_lower)

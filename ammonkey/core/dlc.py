@@ -73,6 +73,8 @@ class DLCModel:
     #FIXME here date should be assigned/overridden beforehand to avoid cutting one set into two
     @property
     def final_folder_name(self) -> str:
+        if not self.short:
+            logger.warning(f'Model {self.name} has no short name, output folder name might be wrong')
         return f"{self.easy_name}-{datetime.now().strftime('%Y%m%d')} [{self.md5_short}]"
     
     @property
@@ -346,6 +348,7 @@ def modelPreset(preset_name:str) -> DLCModel:
             cfg_path=Path(mdl_param.get('cfg-path', '')),
             iteration=mdl_param.get('iteration', 0),
             shuffle=mdl_param.get('shuffle', 1),
+            short=preset_name
         )
     raise ValueError(f'Unknown preset {preset_name}')
 

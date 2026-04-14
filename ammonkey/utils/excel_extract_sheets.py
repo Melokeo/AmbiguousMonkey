@@ -1,6 +1,5 @@
 from datetime import datetime
 from pathlib import Path
-import pandas as pd
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font
 import shutil
@@ -24,6 +23,7 @@ def copy_excel_tabs_to_files(
         source_ws = wb[sheet_name]
         new_wb = Workbook()
         new_ws = new_wb.active
+        assert new_ws is not None
         new_ws.title = sheet_name
         
         # copy all cells with formatting
@@ -33,8 +33,10 @@ def copy_excel_tabs_to_files(
                 continue
                 
             for cell in row:
+                if cell.row is None or cell.column is None:
+                    continue
                 new_cell = new_ws.cell(row=cell.row, column=cell.column)
-                new_cell.value = cell.value
+                new_cell.value = cell.value  # type: ignore
                 if cell.has_style:
                     new_cell.font = cell.font.copy()
                     new_cell.border = cell.border.copy()
@@ -52,12 +54,20 @@ def copy_excel_tabs_to_files(
         output_file = output_dir / f"{sheet_name}.xlsx"
         new_wb.save(output_file)
 
-def dispatch_files(source_dir: str | Path, year_dir: str | Path) -> None:
-    """dispatch yyyymmdd files to yyyy/mm/ structure"""
+def dispatch_files(source_dir: str | Path, dest_dir: str | Path, prefix: str = "RISO") -> None:
+    """Dispatch YYYYMMDD files to destination structure.
+
+    New behavior: pass destination root (e.g. .../DATA_RAW/RISO), then files go to
+    YYYY/MM/YYYYMMDD.
+
+    Backward compatible behavior: if `dest_dir` ends with a 4-digit year folder,
+    use legacy layout MM/YYYYMMDD under that folder and only move matching-year files.
+    """
     
     source_dir = Path(source_dir)
-    year_dir = Path(year_dir)
-    base_year = year_dir.name
+    dest_dir = Path(dest_dir)
+    # backward compatible: if dest_dir is already a year folder
+    is_dest_year_dir = dest_dir.name.isdigit() and len(dest_dir.name) == 4
     
     for file_path in source_dir.glob("*.xlsx"):
         filename = file_path.stem
@@ -67,20 +77,24 @@ def dispatch_files(source_dir: str | Path, year_dir: str | Path) -> None:
             year = filename[:4]
             month = filename[4:6]
             
-            if year == base_year:
-                # create target directory
-                target_dir = year_dir / month / filename
-                if not target_dir.exists():
-                    # raise FileNotFoundError(str(target_dir))
-                    print(f'FileNotFound: {target_dir}. Did you map P: drive?')
+            if is_dest_year_dir:
+                if year != dest_dir.name:
                     continue
-                target_file = target_dir / f"RISO_{filename}.xlsx"
-                
-                # handle duplicates
-                if target_file.exists():
-                    # target_file = target_dir / f"FUSILLO_{filename}_from_cloud.xlsx"
-                    print(f'Skipped {target_file}: exists.')
-                    continue
-                
-                shutil.move(str(file_path), str(target_file))
-                print(f"moved {filename}.xlsx -> {target_file}")
+                target_dir = dest_dir / month / filename
+            else:
+                target_dir = dest_dir / year / month / filename
+
+            if not target_dir.exists():
+                # raise FileNotFoundError(str(target_dir))
+                print(f'FileNotFound: {target_dir}. Did you map P: drive?')
+                continue
+            target_file = target_dir / f"{prefix}_{filename}.xlsx"
+            
+            # handle duplicates
+            if target_file.exists():
+                # target_file = target_dir / f"FUSILLO_{filename}_from_cloud.xlsx"
+                print(f'Skipped {target_file}: exists.')
+                continue
+            
+            shutil.move(str(file_path), str(target_file))
+            print(f"moved {filename}.xlsx -> {target_file}")

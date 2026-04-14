@@ -12,6 +12,12 @@ def main():
     elif args.util == 'animal-wizard':
         from ammonkey.utils.animal_wizard import main as animal_wizard_main
         animal_wizard_main()
+    elif args.util == 'evtmkr' or args.util == 'event-marker':
+        from ammonkey.utils.eventMarker import main as event_marker_main
+        event_marker_main()
+    elif args.util == 'ggl-sync':
+        from ammonkey.utils.google_notes_wizard import main as google_notes_wizard_main
+        google_notes_wizard_main()
     else:
         print(f'Unknown utility: {args.util}')
 

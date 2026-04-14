@@ -4,3 +4,4 @@ __pycache__/
 *.egg-info/
 */Marked Events/
 *.txt
+*_cred/

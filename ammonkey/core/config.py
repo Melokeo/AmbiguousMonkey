@@ -25,6 +25,7 @@ cfg_name_map = {
     'ffprobe': 'ffprobe_path',
     'sync-aud': 'sync_aud',
     'sync-led': 'sync_led',
+    'vid-quality': 'vid_quality',
     # 'tasks': 'tasks',
     # 'task-keywords': 'task_kw',
     'dlc-models': 'dlc_models',
@@ -113,6 +114,7 @@ class _Config:
     ffprobe_path: str
     sync_aud: dict
     sync_led: dict
+    vid_quality: dict[str, list[str]]
     # tasks: dict[str, int]
     # task_kw: dict[str, list[str]]
     dlc_models: dict[str, dict]
@@ -149,6 +151,15 @@ class _Config:
             missing.append("anipose_cfgs (default {})")
         if not self.anipose_libs:
             missing.append("anipose_libs (default {})")
+
+        # special checks
+        for name, quality in self.vid_quality.items():
+            if not name in self.animals:
+                missing.append(f"vid_quality for {name} has no matching animal in animals list")
+            elif not isinstance(quality, list) or len(quality) == 0:
+                missing.append(f"vid_quality for {name} should be a non-empty list of ffmpeg parameters")
+            elif not self._validate_ffmpeg_setting(quality):
+                missing.append(f"Illegal vid_quality: {name} | {quality}")
 
         if missing:
             msg = "Missing or default fields:\n" + "\n".join(f" - {m}" for m in missing)
@@ -194,6 +205,14 @@ class _Config:
             if group:
                 groups.add(group)
         return groups
+    
+    @staticmethod
+    def _validate_ffmpeg_setting(setting: list[str]) -> bool:
+        '''basic validation for ffmpeg setting list'''
+        if not isinstance(setting, list) or len(setting) % 2 != 0:
+            return False
+        # further validation can be added here (check for known flags, ranges, etc)
+        return True
 
 def validate_task_match(tasks: list, task_kw: dict[str, list[str]]) -> bool:
     keys = list(task_kw.keys())
@@ -228,6 +247,7 @@ with open(cfg_path, 'r') as cfg:
                 ffprobe_path=cfg_data.get('ffprobe', ''),
                 sync_aud=cfg_data.get('sync-aud', {}),
                 sync_led=cfg_data.get('sync-led', {}),
+                vid_quality=cfg_data.get('vid-quality', {}),
                 # tasks=tasks,
                 # task_kw=task_kw,
                 dlc_models=cfg_data.get('dlc-models', {}),

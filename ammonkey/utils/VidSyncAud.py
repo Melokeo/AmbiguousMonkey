@@ -128,7 +128,7 @@ def sync_videos(video_paths:list[str],
             lg.warning('Some videos failed to sync automatically, launching manual fallback...')
             use_manual_fallback(sync_results, int(sr), fps)
         else:
-            lg.info('All videos synced successfully, skipping manual fallback.')
+            lg.debug('All videos synced successfully, skipping manual fallback.')
 
     return sync_results
 
@@ -146,6 +146,8 @@ def use_manual_fallback(sync_results, sr: int, fps: float) -> dict:
             if path in corrected:
                 old = sync_results[key]
                 sync_results[key] = (old[0], old[1], corrected[path])
+            else:
+                lg.warning(f'Manual sync result missing for {path}, keeping original offset {sync_results[key][2]}')
         lg.info(f'Manual sync accepted: {corrected}')
     
     return sync_results # in-place update, but return for convenience

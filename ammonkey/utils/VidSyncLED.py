@@ -170,6 +170,7 @@ def find_start_frame(path: str, roi: list[int]|tuple[int,...], threshold: int, L
             plt.axvline(start_frame, color='blue', linestyle='--', label='Start Frame')
             print(f'From {os.path.basename(path)} detected LED lit at frame {start_frame}')
         color = (0, 255, 0) if LED == 'G' else (214, 177, 150)
+
         cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
         cv2.imwrite(os.path.join(out_path,f'detection_result_{os.path.basename(path).split(".")[0]}_{start_frame+1}.jpg'), frame)
         plt.title(f"Brightness Analysis ({LED} LED)")
@@ -180,6 +181,20 @@ def find_start_frame(path: str, roi: list[int]|tuple[int,...], threshold: int, L
         plt.close()
 
     return start_frame+1 if start_frame is not None else -1
+
+# not used
+FFMPEG_DEFAULTS = {
+    "codec": "h264_nvenc",
+    "preset": "p4",            # NVENC presets: p1 (fastest) → p7 (best quality)
+    "tune": "hq",              # hq | ll (low latency) | ull (ultra low latency)
+    "rc_mode": "vbr",          # vbr | cbr | constqp
+    "cq": 23,                  # constant quality level (0–51, lower = better), used when rc_mode=vbr
+    "max_bitrate": "8M",       # ceiling for vbr spikes
+    "bufsize": "16M",          # rate control buffer (typically 2× max_bitrate)
+    "pixel_format": "yuv420p", # broad compatibility
+    "movflags": "+faststart",
+    "extra_flags": [],         # escape hatch for anything not parameterized
+}
 
 def process_videos(cfg):
     global start_time

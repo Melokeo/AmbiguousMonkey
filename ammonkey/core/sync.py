@@ -22,6 +22,7 @@ from .camConfig import CamConfig
 from .fileOp import dataSetup
 from .daet import DAET
 from .config import Config
+from .sync_worker import process_videos
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +208,7 @@ class VidSynchronizer:
                         fps=self.config.audio_fps,
                         duration=self.config.audio_test_duration,
                         start=0,
-                        manual_fallback=True
+                        manual_fallback=True,
                     )
                     
                     # save waveforms for debugging
@@ -545,7 +546,8 @@ class VidSynchronizer:
                     with open(config_path) as f:
                         config = json.load(f)
                     
-                    SyncLED.process_videos(config)
+                    # SyncLED.process_videos(config)
+                    process_videos(config, animal=daet.animal)
                     skip_sync_file.touch()
                     
                     self.wood.logger.info(f"Synced: {daet}")

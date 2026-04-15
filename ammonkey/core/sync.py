@@ -206,7 +206,8 @@ class VidSynchronizer:
                         [str(vp) for vp in vid_paths], 
                         fps=self.config.audio_fps,
                         duration=self.config.audio_test_duration,
-                        start=0
+                        start=0,
+                        manual_fallback=True
                     )
                     
                     # save waveforms for debugging

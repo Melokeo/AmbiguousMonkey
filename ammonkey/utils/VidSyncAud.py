@@ -97,7 +97,9 @@ def find_best_sync_offset(ref_audio, target_audio, sr, fps:float=119.88, hop_len
     return frame_offset, snr
 
 # @cache.memoize(expire=14400)
-def sync_videos(video_paths:list[str], fps=119.88, duration=30, start=0) -> dict[str, tuple[str, np.ndarray, int]]:
+def sync_videos(video_paths:list[str], 
+                fps=119.88, duration=30, start=0,
+                manual_fallback=False) -> dict[str, tuple[str, np.ndarray, int]]:
     """
     Synchronizes a set of videos based on their audio tracks.
     - Extracts only a short duration to speed up processing.
@@ -120,7 +122,33 @@ def sync_videos(video_paths:list[str], fps=119.88, duration=30, start=0) -> dict
             frame_offset = None
         sync_results[video] = (video, target_audio, frame_offset)
 
+    # try manual fallback if enabled and any sync failed
+    if manual_fallback:
+        if any(t[2] is None for t in sync_results.values()):
+            lg.warning('Some videos failed to sync automatically, launching manual fallback...')
+            use_manual_fallback(sync_results, int(sr), fps)
+        else:
+            lg.info('All videos synced successfully, skipping manual fallback.')
+
     return sync_results
+
+def use_manual_fallback(sync_results, sr: int, fps: float) -> dict:
+    try:
+        from ammonkey.utils.VidSyncManual import launch_manual_sync
+    except ImportError as e:
+        lg.error(f'Manual sync fallback enabled but failed to import VidSyncManual: {e}')
+        return sync_results
+    
+    corrected = launch_manual_sync(sync_results, sr=sr, fps=fps)
+    if corrected is not None:
+        for key in sync_results:
+            path = str(sync_results[key][0])  # ← normalize to str
+            if path in corrected:
+                old = sync_results[key]
+                sync_results[key] = (old[0], old[1], corrected[path])
+        lg.info(f'Manual sync accepted: {corrected}')
+    
+    return sync_results # in-place update, but return for convenience
 
 def plot_synced_waveforms(sync_results, sr, fps=119.88, duration=5):
     """Plots the waveforms of all synced audio signals correctly aligned."""

@@ -11,6 +11,7 @@ from .daet import DAET
 from .ani import AniposeProcessor
 from .expNote import ExpNote
 from .statusChecker import StatusChecker
+from .config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,9 @@ def copyH5(
     return file_list
 
 def getDLCMergedFolderName(f1: Path, f2: Path | None) -> str:
-    '''logic for determining merged dlc folder name. expandable.'''
+    '''logic for determining merged dlc folder name. expandable.
+    getting fixed for hardcoded names
+    '''
     f1_info = parseDLCFolderName(f1)
 
     try:
@@ -128,8 +131,9 @@ def parseDLCFolderName(f: Path) -> tuple[str, int, int]:
     return name, int(ymd), int(dex)
 
 def searchModelSets(data_path: Path) -> set[str] | None:
-    #FIXME here it's incompatible w/ config logic
-    pattern = re.compile(r'^(Pull-LR|Brkm|BBT|TS-LR|Pull-Hand|fus-arm)-\d{8}_\d{3,4}$')
+    all_sets = Config.dlc_combos.keys()
+    all_sets_pattern = '|'.join(all_sets)
+    pattern = re.compile(rf'^(?:{all_sets_pattern})-\d{{8}}_\d{{3,4}}$')
     seen = set()
     for file in Path(data_path).rglob('*'):
         if pattern.fullmatch(file.name) and file.name not in seen:

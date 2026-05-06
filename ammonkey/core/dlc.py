@@ -344,7 +344,7 @@ def modelPreset(preset_name:str) -> DLCModel:
     mdl_param = Config.dlc_models.get(preset_name, None)
     if mdl_param:
         return DLCModel(
-            name=mdl_param.get('dir-name', ''),
+            name=preset_name,
             cfg_path=Path(mdl_param.get('cfg-path', '')),
             iteration=mdl_param.get('iteration', 0),
             shuffle=mdl_param.get('shuffle', 1),

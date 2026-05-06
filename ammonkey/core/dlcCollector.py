@@ -74,53 +74,50 @@ def copyH5(
 
     return file_list
 
-def getDLCMergedFolderName(f1: Path, f2: Path | None) -> str:
-    '''logic for determining merged dlc folder name. expandable.
-    getting fixed for hardcoded names
-    '''
-    f1_info = parseDLCFolderName(f1)
+def getDLCMergedFolderName(*paths: Path) -> str:
+    '''logic for determining merged dlc folder name. look for full match in the process
+    combos in config.
+    Returns first full match. Doesn't check for cam group id (L/R..)'''
 
-    try:
-        f2_info = parseDLCFolderName(f2)    #type:ignore
-    except AttributeError:
-        # single camgroup field
-        postfix = f'{f1_info[1]}_{f1_info[2]}'
-        if 'Brkm' in f1_info[0]:
-            return f'Brkm-{postfix}'
-        elif 'BBT' in f1_info[0]:
-            return f'BBT-{postfix}'
-        elif 'Pull-Hand' in f1_info[0]:
-            return f'Pull-Hand-{postfix}'
-        else:
-            return f'{f1_info[0]}-{postfix}'
+    infos = [parseDLCFolderName(p) for p in paths]
+    part_names = [i[0] for i in infos]
+    part_names = sorted(part_names)
+
+    combo_name = None
+
+    for cname, cinfo in Config.dlc_combos.items():
+        models = list(cinfo.values())
+        if sorted(models) == part_names:
+            combo_name = cname
+            break
+    else: # no match, try model dir-name for backward comp
+        for model, minfo in Config.dlc_models.items():
+            mdir_name = minfo.get('dir-name', None)
+            if not mdir_name or mdir_name not in part_names:
+                continue
+            part_names = [model if p == mdir_name else p for p in part_names]
         
-    # multiple group field
-    if 'TS' in f1_info[0] and 'TS' in f2_info[0]:
-        return f'TS-LR-{f1_info[1]}_{mergeId(f1_info[2], f2_info[2])}'
-    elif 'Pull' in f1_info[0] and 'Pull' in f2_info[0]:
-        return f'Pull-LR-{f1_info[1]}_{mergeId(f1_info[2], f2_info[2])}'
-    elif 'fus-arm' in f1_info[0] and 'fus-arm' in f2_info[0]:
-        return f'fus-arm-{f1_info[1]}_{mergeId(f1_info[2], f2_info[2])}'
+        for cname, cinfo in Config.dlc_combos.items():
+            models = list(cinfo.values())
+            if sorted(models) == part_names:
+                combo_name = cname
+                break
+        else:
+            combo_name = part_names[0]
     
-    raise ValueError(f'Unsupported model set: {f1.name} and {f2.name}') #type:ignore
+    merged_id = mergeId(*(i[2] for i in infos))
 
-def getDLCMergedNameShort(f1: Path, f2: Path) -> str:
-    '''logic for determining merged dlc folder name. expandable.'''
-    f1_info = parseDLCFolderName(f1)
-    f2_info = parseDLCFolderName(f2)
-    merged_id = mergeId(f1_info[2], f2_info[2])
+    return f'{combo_name}-{infos[0][1]}_{merged_id}'
 
-    if 'TS' in f1_info[0] and 'TS' in f2_info[0]:
-        return f'TS[{merged_id}]'
-    elif 'Pull' in f1_info[0] and 'Pull' in f2_info[0]:
-        return f'Pull[{merged_id}]'
-    elif True:
-        pass
-    
-    raise ValueError(f'Unsupported model set: {f1.name} and {f2.name}')
-
-def mergeId(a: int, b: int) -> int:
-    return int(f"{a:04d}"[-2:] + f"{b:04d}"[-2:])
+def mergeId(*ids: int) -> str:
+    if len(ids) == 1:
+        return f"{ids[0]:04d}"[-4:]
+    if len(ids) == 2:
+        return f"{ids[0]:02d}"[-2:] + f"{ids[1]:02d}"[-2:]
+    if len(ids) == 3:
+        return f"{ids[0]:02d}"[-2:] + f"{ids[1]:01d}"[-1:] + f"{ids[2]:01d}"[-1:]
+    # 4 or more: take last digit of each, use first 4
+    return "".join(f"{i:01d}"[-1:] for i in ids[:4])
 
 def parseDLCFolderName(f: Path) -> tuple[str, int, int]:
     '''matches names eg. TS-L-20250618 [1991]'''

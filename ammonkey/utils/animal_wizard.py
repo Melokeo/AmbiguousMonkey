@@ -2,11 +2,14 @@
 
 from pathlib import Path
 import shutil
+import sys
 
 from ruamel.yaml import YAML
 yaml = YAML(typ='safe', pure=True)
 
-from rich.console import Console
+from rich.console import Console, Group
+from rich.table import Table
+from rich.live import Live
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
 from rich.rule import Rule
@@ -53,10 +56,6 @@ def tui_select(options: list[str], prompt: str = "Select:") -> str:
     return options[selected]
 
 def tui_multiselect(options: list[tuple[str, str]], prompt: str = "Select options:") -> list[str]:
-    from rich.live import Live
-    from rich.table import Table
-    from rich.console import Group
-    
     selected_indices = set()
     focused = 0
     
@@ -111,6 +110,7 @@ def main():
         "New DLC Model",
         "New Combo",
         "New Anipose Config",
+        "New Anipose Library",
         "All Above",
         "Quit"
     ]
@@ -126,6 +126,8 @@ def main():
             add_combo()
         elif choice == "New Anipose Config":
             add_anipose_cfg()
+        elif choice == "New Anipose Library":
+            add_anipose_lib()
         elif choice == "All Above":
             add_animal()
             while Confirm.ask("Add a new DLC model?"):
@@ -343,8 +345,82 @@ def add_anipose_cfg() -> bool:
 def add_anipose_lib() -> bool:
     '''add a new group of anipose configs that share the same calib file (same cam setup)'''
     console.print(Rule("[bold]New Anipose Library[/bold]", style="cyan"))
-    console.print("[dim]Not implemented yet...[/dim]")
-    return False
+    lines_used = 0
+    while True:
+        name = Prompt.ask("[cyan]Library name[/cyan]")
+        lines_used += 1
+        name = name.strip()
+        if not name:
+            console.print("[bold yellow]Name cannot be empty[/bold yellow]")
+            lines_used += 1
+            continue
+        if Config.anipose_libs.has_lib_name(name):
+            console.print(f"[bold yellow]Library name [bold white]{name}[/bold white] already" 
+                          "exists in config. Choose another.[/bold yellow]")
+            lines_used += 1
+            continue
+        break
+    
+    new_path = Prompt.ask("[cyan]Path to store new calib files[/cyan]")
+    lines_used += 1
+    new_path = Path(new_path.strip('"'))
+
+    created_dir = False
+    dir_lines = 0
+    if not new_path.exists():
+        if not Confirm.ask(f"Path [bold cyan]{new_path}[/bold cyan] does not exist. Create?", default=True):
+            return False
+        dir_lines += 1
+        try:
+            new_path.mkdir(parents=True, exist_ok=True)
+            console.print(f"[bold green]Created directory[/bold green]")
+            dir_lines += 1
+            created_dir = True
+        except OSError as e:
+            console.print(f"[bold red]Error:[/bold red] Failed to create directory: {e}")
+            return False
+        
+    # flush the input lines
+    lines_to_clear = lines_used + dir_lines
+    for _ in range(lines_to_clear):
+        sys.stdout.write("\033[1A\033[2K")
+    sys.stdout.flush()
+        
+    combos = get_all_combos()
+    if not combos:
+        console.print("[bold red]Error:[/bold red] No model combos available. Please add a combo first.")
+        return False
+    
+    console.print(f"[bold]{name} ({new_path})[/bold]")
+        
+    selected_combos = tui_multiselect(combos, "Select model combos that go to this lib:")
+    if not selected_combos:
+        console.print("[bold yellow]No combos selected.[/bold yellow]")
+        return False
+        
+    sys.stdout.write("\033[1A\033[2K")
+    sys.stdout.flush()
+    
+    console.print("[bold green]Will add:[/bold green]")
+    console.print(f"  [bold]Name[/bold]  : {name}")
+    console.print(f"  [bold]Path[/bold]  : {new_path}")
+    console.print(f"  [bold]Model sets[/bold]: [cyan]{', '.join(selected_combos)}[/cyan]")
+    
+    if Confirm.ask("Confirm adding"):
+        # save to config
+        Config.add_anipose_lib(
+            name=name,
+            path=str(new_path),
+            models=selected_combos,
+        )
+        Config.save()
+        console.print(f"[bold green]OK[/bold green] Added Anipose library [bold]{name}[/bold].")
+    else:
+        sys.stdout.write("\033[1A\033[2K")
+        sys.stdout.flush()
+        console.print("[dim]Cancelled Anipose library creation.[/dim]")
+
+    return True
 
 
 def config_cam_grouping():
@@ -364,6 +440,28 @@ def copy_dlc_dir(src: Path, dest: Path) -> bool:
             shutil.rmtree(dest)
         with console.status(f"Copying DLC model to [bold]{dest}[/bold]...", spinner="monkey"):
             shutil.copytree(src, dest)
+        console.print(f"[bold green]Success:[/bold green] Copied DLC model to [bold]{dest}[/bold]")
+        return True
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] Failed to copy DLC model: {e}")
+        return False
+
+def copy_dlc_delicate(src: Path, dest: Path) -> bool:
+    '''a more delicate copy that only takes dlc-models and metadata.yaml in training-datasets '''
+    # The implementation is auto completed by AI and is TOTALLY WRONG. FIX LATER DONT USE
+    try:
+        if dest.exists():
+            console.print(f"[bold yellow]Warning:[/bold yellow] Destination already exists: [bold]{dest}[/bold]")
+            if not Confirm.ask("Overwrite?"):
+                return False
+            shutil.rmtree(dest)
+        with console.status(f"Copying DLC model to [bold]{dest}[/bold]...", spinner="monkey"):
+            dest.mkdir(parents=True, exist_ok=True)
+            for item in src.iterdir():
+                if item.is_dir() and item.name.startswith('iteration'):
+                    shutil.copytree(item, dest / item.name)
+                elif item.is_file() and item.name == 'metadata.yaml':
+                    shutil.copy2(item, dest / item.name)
         console.print(f"[bold green]Success:[/bold green] Copied DLC model to [bold]{dest}[/bold]")
         return True
     except Exception as e:
@@ -430,6 +528,15 @@ def get_all_models() -> list[tuple[str, str]]:
         models.append((name, f"{name} [dim](iter {info['iteration']}, shuffle {info['shuffle']})[/dim]"))
 
     return models
+
+def get_all_combos() -> list[tuple[str, str]]:
+    '''get all DLC combos in the config for making anipose lib'''
+    combos = []
+    for name, info in getattr(Config, 'dlc_combos', {}).items():
+        model_names = list(info.values())
+        combos.append((name, f"{name} [dim]({', '.join(model_names)})[/dim]"))
+
+    return combos
 
 if __name__ == "__main__":
     main()

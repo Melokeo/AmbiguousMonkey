@@ -103,6 +103,9 @@ class AniposeLibs:
                 # lg.warning(f'Key case mismatch for anipose lib model key: {key}')
                 return Path(info.get('path', ''))
         return None
+    
+    def has_lib_name(self, name: str) -> bool:
+        return name.lower() in [n.lower() for n in self.libs.keys()]
 
 @dataclass
 class _Config:
@@ -213,6 +216,23 @@ class _Config:
             return False
         # further validation can be added here (check for known flags, ranges, etc)
         return True
+    
+    def add_anipose_lib(self, name: str, path: str, models: list[str]) -> None:
+        '''add or update anipose lib config, this is runtime-only'''
+        if not name:
+            lg.error('Anipose lib name cannot be empty.')
+            return
+        if not path:
+            lg.error(f'Anipose lib {name} path cannot be empty.')
+            return
+        if not models or not isinstance(models, list):
+            lg.error(f'Anipose lib {name} models should be a non-empty list of model keywords.')
+            return
+        
+        self.anipose_libs.libs[name] = {
+            'path': Path(path),
+            'models': models
+        }
 
 def validate_task_match(tasks: list, task_kw: dict[str, list[str]]) -> bool:
     keys = list(task_kw.keys())

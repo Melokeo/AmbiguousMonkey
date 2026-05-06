@@ -87,8 +87,7 @@ class CalibLib:
         
     def __repr__(self):
         return f'CalibLib ({len(self.lib)} entries)'
-    
-BASE_DIR = Path(__file__).parent.parent # should be ammonkey/
+
 
 @dataclass  
 class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
@@ -153,7 +152,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
 
     def getCfgFile(self) -> Path:
         '''get cfg based on model_set_name'''
-        cfg_path = BASE_DIR / 'cfgs'
+        cfg_path = Config.anipose_cfg_dir
         cfg_matching = Config.anipose_cfgs
         for k, v in cfg_matching.items():
             if k in self.model_set_name:

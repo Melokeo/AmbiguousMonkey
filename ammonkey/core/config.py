@@ -10,7 +10,8 @@ from pathlib import Path
 import logging
 lg = logging.getLogger(__name__)
 
-cfg_path = Path(__file__).parent.parent / 'cfgs/amm-config.yaml'
+BASE_DIR = Path(__file__).parent.parent # should be ammonkey/
+cfg_path = BASE_DIR / 'cfgs/amm-config.yaml'
 
 if not cfg_path.exists():
     raise FileNotFoundError(f'Basic config not found: {cfg_path}')
@@ -31,6 +32,7 @@ cfg_name_map = {
     'dlc-models': 'dlc_models',
     'dlc-process-combos': 'dlc_combos',
     'anipose-conda-env': 'anipose_env',
+    'anipose-cfg-dir': 'anipose_cfg_dir',
     'anipose-cfgs': 'anipose_cfgs',
     'anipose-libs': 'anipose_libs',
 }
@@ -123,8 +125,13 @@ class _Config:
     dlc_models: dict[str, dict]
     dlc_combos: dict[str, dict]
     anipose_env: str
+    anipose_cfg_dir: Path
     anipose_cfgs: dict[str, str]
     anipose_libs: AniposeLibs
+
+    def __post_init__(self):
+        if self.anipose_cfg_dir.name == '**':
+            self.anipose_cfg_dir = BASE_DIR / 'cfgs'
 
     def validate(self) -> tuple[bool, str]:
         missing = []
@@ -150,6 +157,8 @@ class _Config:
             missing.append("sync_led (default {})")
         if not self.anipose_env:
             missing.append("anipose_env (empty)")
+        if not self.anipose_cfg_dir or not self.anipose_cfg_dir.exists():
+            missing.append("anipose_cfg_dir (missing or invalid path)")
         if not self.anipose_cfgs:
             missing.append("anipose_cfgs (default {})")
         if not self.anipose_libs:
@@ -184,6 +193,7 @@ class _Config:
                     k: {'path': str(v['path']), 'models': v['models']} 
                     for k, v in self.anipose_libs.libs.items()
                 }
+                d['anipose_cfg_dir'] = str(self.anipose_cfg_dir)
                 # apply name mapping
                 d = {cfg_name_map_rev.get(k, k): v for k, v in d.items()}
 
@@ -273,6 +283,7 @@ with open(cfg_path, 'r') as cfg:
                 dlc_models=cfg_data.get('dlc-models', {}),
                 dlc_combos= cfg_data.get('dlc-process-combos', {}),
                 anipose_env=cfg_data.get('anipose-conda-env', ''),
+                anipose_cfg_dir=Path(cfg_data.get('anipose-cfg-dir', '**')),
                 anipose_cfgs=cfg_data.get('anipose-cfgs', {}),
                 anipose_libs=AniposeLibs.from_dicts(cfg_data.get('anipose-libs', {}))
             )

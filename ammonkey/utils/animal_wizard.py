@@ -339,8 +339,58 @@ def add_combo() -> bool:
 
 def add_anipose_cfg() -> bool:
     console.print(Rule("[bold]New Anipose Config[/bold]", style="cyan"))
-    console.print("[dim]Not implemented yet...[/dim]")
-    return False
+    
+    config_src = Prompt.ask("[cyan]Path to anipose config.yaml[/cyan]")
+    if not config_src:
+        console.print("[bold red]Error:[/bold red] Path cannot be empty.")
+        return False
+    config_src = Path(config_src.strip('"'))
+    if not config_src.exists():
+        console.print(f"[bold red]Error:[/bold red] Path does not exist: [bold]{config_src}[/bold]")
+        return False
+    if not config_src.is_file() or not config_src.name.endswith('.toml'):
+        console.print(f"[bold red]Error:[/bold red] Path must be a .toml file: [bold]{config_src}[/bold]")
+        return False
+    
+    config_dst = Config.anipose_cfg_dir
+
+    # select which combos go to this config
+    combos = get_all_combos()
+    if not combos:
+        console.print("[bold red]Error:[/bold red] No model combos available. Please add a combo first.")
+        return False
+        
+    selected_combos = tui_multiselect(combos, "Select model combos that map to this config:")
+    if not selected_combos:
+        console.print("[bold yellow]No combos selected.[/bold yellow]")
+        return False
+    
+    dst_name = Prompt.ask("Rename the config file?", default=config_src.name)
+    if not dst_name.endswith('.toml'):
+        dst_name += '.toml'
+    if Confirm.ask(
+        f"Will add new config [bold cyan] {dst_name}[/bold cyan] [dim]({config_src.name})[/dim], used for [cyan]{', '.join(selected_combos)}[/cyan]. Confirm"
+    ):
+        if config_dst == config_src.parent:
+            console.print(f"[bold yellow]The file is already in config dir[/bold yellow]")
+
+        else: # copy
+            config_dst = config_dst / dst_name
+
+            result = shutil.copy2(config_src, config_dst)
+            console.print(f"[bold green]Copied:[/bold green] [bold]{result}[/bold]")
+        
+        # link combos
+        for combo in selected_combos:
+            Config.anipose_cfgs[combo] = config_dst.name
+        Config.save()
+        console.print(f"[bold green]OK[/bold green] Saved Anipose config [bold]{config_dst.name}[/bold].")
+    else:
+        sys.stdout.write("\033[1A\033[2K")
+        sys.stdout.flush()
+        console.print("[dim]Cancelled mapping.[/dim]")
+
+    return True
 
 def add_anipose_lib() -> bool:
     '''add a new group of anipose configs that share the same calib file (same cam setup)'''
@@ -418,7 +468,7 @@ def add_anipose_lib() -> bool:
     else:
         sys.stdout.write("\033[1A\033[2K")
         sys.stdout.flush()
-        console.print("[dim]Cancelled Anipose library creation.[/dim]")
+        console.print("[dim]Cancelled library creation.[/dim]")
 
     return True
 

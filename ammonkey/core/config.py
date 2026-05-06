@@ -100,7 +100,7 @@ class AniposeLibs:
             if key in info.get('models', []):
                 return Path(info.get('path', ''))
             elif key in [m.lower() for m in info.get('models', [])]:
-                lg.warning(f'Key case mismatch for anipose lib model key: {key}')
+                # lg.warning(f'Key case mismatch for anipose lib model key: {key}')
                 return Path(info.get('path', ''))
         return None
 

@@ -139,7 +139,13 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         '''here maps model set to the calibration lib'''
         # match model set name to calib lib, using AniposeLibs
         msn_lower = model_set_name.lower()
-        path = libs.get_lib_path_for_key(msn_lower)
+
+        # remove date and id from msn
+        msn_lower = re.sub(r'-\d{8}_\d{3,4}$', '', msn_lower)
+        path = libs.get_lib_path_for_key_exact(msn_lower)
+        if not path:
+            path = libs.get_lib_path_for_key(msn_lower)
+
         if path:
             return CalibLib(path)
         else:
@@ -173,7 +179,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
                 return None
         else:
             if str(date) == self.note.date:
-                logger.debug(f'Calib files match curr date')
+                logger.debug(f'Calib file matches curr date')
                 # now determine exactly which calib file, when multiple exist for same date
                 note_calibs = [str(daet) for daet in self.note.getCalibs()]
                 if len(note_calibs) == 1:

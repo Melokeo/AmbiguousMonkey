@@ -284,10 +284,6 @@ class TabAnipose:
         self.btn_make_vid.disabled = processing
         self.tab.update()
 
-
-#TODO: if a model set is triangulated but videos not made, it won't appear in the dropdown.
-# should be fixed.
-
     def _get_vid_dropdown_options(self) -> list[str]:
         if lf.note_filtered:
             sc = StatusChecker(lf.note_filtered)

@@ -1,12 +1,15 @@
 import flet as ft
 import logging
+import asyncio
 from pathlib import Path
 from itertools import tee
+from dataclasses import dataclass
 
 from ..core.expNote import iter_xlsx, xlsx_iter_to_dates, ExpNote, DAET
 from ..core.config import Config
 
 from . import landfill as lf
+from .landfill import TabJob
 from .components.flet_logging import FletLogHandler, ColorLoggingFormatter
 from .tabs.tab_setup import TabSetup
 from .tabs.tab_sync import TabSync
@@ -16,6 +19,11 @@ from .tabs.tab_final import TabFinal
 from .tabs.tab_setting import TabSetting
 
 from .business.full_pipeline import run_all_local, run_all_dask
+
+@dataclass
+class TabsState:
+    '''holds state for tabs to preserve gui when switching animal/date'''
+    ...
 
 class AmmApp:
     def __init__(self) -> None:
@@ -101,6 +109,7 @@ class AmmApp:
         )
 
         self.tabs_list: list[ft.Tab] = []
+        self.tab_wrappers: list = []
 
         self.tab_setup   = TabSetup(logger=self.lg, unlocker_func=self.unlock_tabs)
         self.tab_sync    = TabSync(logger=self.lg)
@@ -109,8 +118,9 @@ class AmmApp:
         self.tab_final   = TabFinal(logger=self.lg)
         self.tab_setting = TabSetting(logger=self.lg)
 
-        self.tabs_list.extend([self.tab_setup.tab, self.tab_sync.tab, self.tab_dlc.tab, 
-                              self.tab_ani.tab, self.tab_final.tab, self.tab_setting.tab])
+        self.tab_wrappers.extend([self.tab_setup, self.tab_sync, self.tab_dlc, 
+                              self.tab_ani, self.tab_final, self.tab_setting])
+        self.tabs_list = [tw.tab for tw in self.tab_wrappers]
 
         self.tabs = ft.Tabs(
             tabs=self.tabs_list,
@@ -217,6 +227,9 @@ class AmmApp:
         else:
             self.lg.info(f"Selected {n}")
 
+        # update job
+        self.switch_job()
+
         # update ui
         try:
             self.tab_setup.note_selector.refresh_note()
@@ -235,6 +248,63 @@ class AmmApp:
             self.pg.update()
 
         return
+    
+    # -- handling job state switching -------
+    def switch_job(self) -> None:
+        '''save current to kennel, then create new (or get existing)'''
+        animal = lf.note_filtered.animal if lf.note_filtered else None
+        date = lf.note_filtered.date if lf.note_filtered else None
+        if not animal or not date:
+            self.lg.warning('switch_job: animal or date get None, which is impossible')
+            return
+        
+        # it might trigger when note is actually the same
+        if lf.curr_job and animal == lf.curr_job.key[0] and date == lf.curr_job.key[1]:
+            self.lg.debug('switch_job: same animal/date as current, no switch needed')
+            # or.. needed??
+            return
+        
+        new_job = lf.kennel.get_or_new(
+            animal=animal,
+            date=date,
+            note=lf.note_filtered,
+        )
+
+        if lf.curr_job:
+            self.update_job_from_all_tabs()
+            lf.curr_job.unsubscribe()
+            lf.kennel.update_job(lf.curr_job) # loooks nonsense because they are the same instance, idk
+        
+        lf.curr_job = new_job
+        lf.curr_job.subscribe(self._on_job_update)
+        self.trigger_tab_load() # which will be default state if new
+        self.lg.debug(f'switch_job: switched to {lf.curr_job}')
+    
+    def update_job_from_all_tabs(self) -> None:
+        '''go over all tabs, ask them to update curr job'''
+        for tw in self.tab_wrappers:
+            if hasattr(tw, 'update_state_to'):
+                tw.update_state_to(lf.curr_job)
+            else:
+                self.lg.debug(f'Tab {tw.tab.text} has no update_state_to method')
+
+    def trigger_tab_load(self) -> None:
+        '''tell tabs to restore state if any running'''
+        for tw in self.tab_wrappers:
+            if hasattr(tw, 'render_state_from'):
+                tw.render_state_from(lf.curr_job)
+            else:
+                self.lg.debug(f'Tab {tw.tab.text} has no render_state_from method')
+    
+    async def _on_job_update(self, job: TabJob) -> None:
+        if job is not lf.curr_job:
+            return # defensive; old job should've already unsubscribed
+        self.lg.debug(f'job update received from {job}')
+        self.trigger_tab_load() 
+        self.pg.update()
+
+    
+    # ------- end --------------
     
     def on_search_click(self, e:ft.ControlEvent) -> None:
         self.lg.debug('on_search_click')

@@ -1,17 +1,25 @@
 import flet as ft
 import logging
+import asyncio
 
 from .. import landfill as lf
+from ..landfill import JobStatus, TabJob
 from ...core.dlcCollector import getUnprocessedDlcData
 from ...core.ani import AniposeProcessor, runAnipose 
 from ...core.finalize import violentCollect
 from ...core.statusChecker import StatusChecker
+from ..business.async_workers import _run_anipose
 
-NOTHING = '* Nothing *'
+'''nothing'''
+NOTHING = '* Nothing *' # nothing
+
+TAB_SIGNITURE = 'tab_ani'
+
+from ammonkey.utils.ol_logging import set_colored_logger
 
 class TabAnipose:
     def __init__(self, logger: logging.Logger) -> None:
-        self.lg = logger
+        self.lg = set_colored_logger(__name__)
         self.ap: AniposeProcessor | None = None
 
         udd = self._get_dropdown_options()
@@ -35,7 +43,7 @@ class TabAnipose:
         self.btn_run_ani = ft.ElevatedButton(
             text='Run anipose',
             icon=ft.Icons.PLAY_CIRCLE,
-            on_click=self.on_run_anipose_click
+            on_click=self.on_run_anipose_click_jobbed,
         )
 
         self.vid_dropdown = ft.Dropdown(
@@ -146,13 +154,30 @@ class TabAnipose:
 
     def on_model_change(self, e: ft.ControlEvent):
         pass
+
+    async def on_run_anipose_click_jobbed(self, e: ft.ControlEvent):
+        job = lf.curr_job
+        if job is None: 
+            return
+        if job.is_running:
+            self.lg.warning('task already running for this note'); 
+            return
+        
+        msn = self.model_dropdown.value
+        if not msn or msn == NOTHING:
+            self.lg.error('no model selected'); return
+
+        job.selected_model = msn
+        job.task = asyncio.create_task(_run_anipose(job))
+
     
     def on_run_anipose_click(self, e: ft.ControlEvent):
         msn = self.model_dropdown.value
         self.lg.debug(f'run ani w/ {msn}')
-        if msn is None or msn == NOTHING:
-            self.lg.error('Model set to process is not selected')
-            return
+        # if msn is None or msn == NOTHING:
+        #     self.lg.error('Model set to process is not selected')
+        #     return
+        msn = 'TEST' # for debug
         
         self.lg.info('Starting anipose...')
         self.lg.debug(f'This note has calibs: {[str(daet) for daet in lf.note_filtered.getCalibs()]}')
@@ -266,7 +291,7 @@ class TabAnipose:
         self.lg.debug(self.ap)
         if self.ap is None:
             return
-        self.ani_info.value = self.ap.info
+        self.ani_info.value = self.ap.info  #type: ignore
         self.tab.update()
 
     def _get_dropdown_options(self) -> list[str]:
@@ -274,14 +299,17 @@ class TabAnipose:
             udd: list[str] | None = getUnprocessedDlcData(lf.note_filtered.data_path) 
         else:
             udd = None 
-        if udd is None:
-            udd = [NOTHING]
-        return udd
+        return udd if udd else [NOTHING]
     
     def _ui_processing_stat(self, processing:bool) -> None:
+        self.lg.debug(f'switching processing stat: {processing}')
         self.running_row.visible = processing
         self.btn_run_ani.disabled = processing
         self.btn_make_vid.disabled = processing
+        if processing:
+            self.tab.icon = ft.Icons.FIRE_EXTINGUISHER
+        else:
+            self.tab.icon = ft.Icons.THREED_ROTATION
         self.tab.update()
 
     def _get_vid_dropdown_options(self) -> list[str]:
@@ -294,6 +322,22 @@ class TabAnipose:
             udd = [ms for ms, stat in process_stats.items() if not stat]
         else:
             udd = None
-        if not udd:  # both None and []
-            udd = [NOTHING]
-        return udd
+        return udd if udd else [NOTHING]
+    
+    def update_state_to(self, job: TabJob) -> None:
+        '''update self related info into given job for state keeping'''
+        ai = self.ani_info.value
+        job.ani_info = ai if ai else '<anipose processor info>'
+        job.selected_model = self.model_dropdown.value
+        job.selected_vid = self.vid_dropdown.value
+        job.rng_video = (self.rng_video.start_value, self.rng_video.end_value)
+        # job.ap = self.ap
+        # job.ani_processing = self.running_row.visible # no, worker handles this auto
+    
+    def render_state_from(self, job: TabJob) -> None:
+        self.ani_info.value = job.ani_info
+        self.vid_dropdown.value = job.selected_vid
+        self.model_dropdown.value = job.selected_model
+        self.rng_video.start_value, self.rng_video.end_value = job.rng_video
+        self.ap = job.ap
+        self._ui_processing_stat(job.ani_processing)

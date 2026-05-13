@@ -157,7 +157,7 @@ def plot_synced_waveforms(sync_results, sr, fps=119.88, duration=5):
     plt.figure(figsize=(10, len(sync_results) * 2))
 
     max_length = int(duration * sr)
-    min_frame_offset = min([t[2] for t in sync_results.values()])  # Earliest starting point
+    min_frame_offset = min([t[2] for t in sync_results.values() if t[2] is not None])  # Earliest starting point
     
     for i, (video, audio, frame_offset) in enumerate(sync_results.values()):
         start_sample = int(((frame_offset - min_frame_offset)/fps)*sr)
@@ -185,7 +185,7 @@ def save_synced_waveforms(sync_results, sr, fps=119.88, duration=5, tgt_path='')
     plt.figure(figsize=(10, len(sync_results) * 2))
 
     max_length = int(duration * sr)
-    min_frame_offset = min([t[2] for t in sync_results.values()])  # Earliest starting point
+    min_frame_offset = min([t[2] for t in sync_results.values() if t[2] is not None])  # Earliest starting point
     
     for i, (video, audio, frame_offset) in enumerate(sync_results.values()):
         if frame_offset is None:
@@ -227,6 +227,7 @@ def has_dominant_peak(correlation: np.ndarray, ratio_thresh: float = THRES_PEAK)
     top_two = np.partition(heights, -2)[-2:]
     return top_two[1] / top_two[0] > ratio_thresh, top_two[1] / top_two[0]
 
+
 if __name__ == '__main__':
     video_files = [
         r'D:\AmbiguousMonkey\errVids\C0523.mp4',
@@ -257,9 +258,16 @@ if __name__ == '__main__':
         "P:\\projects\\monkeys\\Chronic_VLL\\DATA_RAW\\Pici\\2025\\03\\20250326\\cam3\\C0805.mp4",
         "P:\\projects\\monkeys\\Chronic_VLL\\DATA_RAW\\Pici\\2025\\03\\20250326\\cam4\\C0764.mp4",
     ]
+
+    video_files = [
+        r"D:\AmbiguousMonkey\errVids\pepe20260414\C2126.MP4",
+        r"D:\AmbiguousMonkey\errVids\pepe20260414\C2288.MP4",
+        r"D:\AmbiguousMonkey\errVids\pepe20260414\C0641.MP4",
+        r"D:\AmbiguousMonkey\errVids\pepe20260414\C2200.MP4",
+    ]
     frame_shifts = sync_videos(video_files, fps=119.88, duration=80)
     print([i[-1] for i in frame_shifts.values()])
     save_synced_waveforms(frame_shifts, 48000, 119.88,
-                           duration=30, 
-                           tgt_path=r'D:\AmbiguousMonkey\errVids',
-                           )
+                           duration=5, 
+                           tgt_path=r'D:\AmbiguousMonkey\errVids\pepe20260414\detection',
+                         )

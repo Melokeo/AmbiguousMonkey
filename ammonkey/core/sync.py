@@ -14,7 +14,7 @@ from typing import Optional, Sequence
 import warnings
 
 from ..utils import VidSyncLED as SyncLED
-from ..utils import VidSyncAud as SyncAud
+from ..utils import vid_sync_aud_new as SyncAud
 from ..utils import ROIConfig as Roi
 from ..utils.log import Wood
 from .expNote import ExpNote, Task
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class SyncConfig:
     """Configuration for synchronization detection"""
     # audio sync settings
-    audio_test_duration: int = 60
+    audio_test_duration: int = 180
     audio_fps: float = 119.88
     audio_sample_rate: int = 48000
     audio_save_duration: int = 10

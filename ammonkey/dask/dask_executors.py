@@ -144,11 +144,12 @@ def execute_sync_detect(task: DaskTask) -> dict:
     if rois:
         synchronizer.cam_config.rois = rois
     
-    detected_daets = synchronizer._getAllDetectedDaets(Task.ALL)
-    daets_to_detect = [d for d in daets if not d in detected_daets]
+    daets_to_detect = synchronizer._getTargetDaets(task=Task.ALL, skip_existing=True)
+    lg.debug('Det Target: ' + str([f'{d.experiment}-{d.task}' for d in daets_to_detect]))
+    detected_daets = [d for d in daets if not d in daets_to_detect]
 
-    # run audio sync for all daets
-    audio_results = synchronizer._runAudioSync(daets)
+    # run audio sync
+    audio_results = synchronizer._runAudioSync(daets_to_detect)
     
     # run LED detection and cross-validation for each
     detection_results = []
@@ -185,7 +186,7 @@ def execute_sync_detect(task: DaskTask) -> dict:
     }
 
 def execute_sync_video(task: DaskTask) -> dict:
-    """execute video synchronization (gpu-heavy)"""
+    """execute single video synchronization (gpu-heavy)"""
     note = _get_note(task)
     daet = task.get_daets()[0]  # should have exactly one
     
@@ -199,6 +200,15 @@ def execute_sync_video(task: DaskTask) -> dict:
             'success': False,
             'message': 'No sync config found'
         }
+    
+    # test for existence of .skipSync
+    for f in config_files:
+        if (f.parent / '.skipSync').exists():
+            return {
+                'daet': str(daet),
+                'success': True,
+                'message': 'Sync already done, skipping'
+            }
     
     import json
     with open(config_files[0]) as f:
@@ -265,7 +275,7 @@ def execute_ani_full(task: DaskTask) -> dict:
     ap = AniposeProcessor(note, model_set)
     
     try:
-        success = ap.runPipeline()
+        success = ap.runPipelineCLI()
         
         return {
             'model_set': model_set,
@@ -299,7 +309,7 @@ def execute_ani_pending(task: DaskTask) -> dict:
         lg.info(f'AP processing {msn}')
         ap = AniposeProcessor(note, msn)
         try:
-            success = ap.runPipeline()
+            success = ap.runPipelineCLI()
             results.append( {
                 'model_set': msn,
                 'success': success,

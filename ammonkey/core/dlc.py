@@ -66,10 +66,10 @@ class DLCModel:
         return f"{self.name}shuffle{self.shuffle}"
     
     @property
-    def start_date(self) -> str:
-        m = re.search(r'(\d{8})', self.name)
-        return m.group(1) if m else '00000000'
-    
+    def first_run_date(self) -> str:
+        '''updated once for one model instance to keep track of date, to avoid cross day splitting'''
+        return ''
+
     #FIXME here date should be assigned/overridden beforehand to avoid cutting one set into two
     @property
     def final_folder_name(self) -> str:
@@ -208,7 +208,11 @@ class DLCModel:
         tree.mkdir(parents=True, exist_ok=True)
         for sub in vid_root.glob(f'*{self.id_output}*'):
             if sub.is_file():
-                sub.rename(tree / sub.name)
+                new_path = tree / sub.name
+                if new_path.exists():
+                    logger.warning(f'File already exists in DLC output folder, skipping: {new_path}')
+                    continue
+                sub.rename(new_path)
                 file_list.append(sub.name+'\n')
         
         # write this analysis' info
@@ -344,7 +348,7 @@ def modelPreset(preset_name:str) -> DLCModel:
     mdl_param = Config.dlc_models.get(preset_name, None)
     if mdl_param:
         return DLCModel(
-            name=preset_name,
+            name=mdl_param.get('dir-name', preset_name),
             cfg_path=Path(mdl_param.get('cfg-path', '')),
             iteration=mdl_param.get('iteration', 0),
             shuffle=mdl_param.get('shuffle', 1),

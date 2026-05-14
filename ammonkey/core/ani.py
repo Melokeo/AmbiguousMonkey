@@ -22,6 +22,15 @@ logger.setLevel(logging.DEBUG)
 dlc_postfix_pattern = re.compile(r'DLC_resnet\d+_[^_]+shuffle\d+_\d+(?:_filtered)?\.h5$')
 libs = Config.anipose_libs
 
+CLI_ENV = {**os.environ,
+        "XLA_PYTHON_CLIENT_PREALLOCATE": "false",
+        "XLA_PYTHON_CLIENT_ALLOCATOR": "platform",
+        "ANIPOSE_DISABLE_JAX_X64": "1",
+        "OMP_NUM_THREADS": "4",
+        "MKL_NUM_THREADS": "4",
+        "OPENBLAS_NUM_THREADS": "4",
+        "NUMBA_NUM_THREADS": "4"}
+
 def getH5Rename(file_name:Path | str, stem_only:bool=False) -> str:
     '''get rid of dlc postfix'''
     if isinstance(file_name, Path):
@@ -212,8 +221,27 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             self.calibrate()
             self.batchSetup()
             self.triangulate()
+        except subprocess.CalledProcessError as e:
+            logger.error(f'AP.runPipeline subprocess error: rc={e.returncode}, cmd={e.cmd}')
+            return False
         except Exception as e:
             logger.error(f'AP.runPipeline error: {e}')
+            return False
+        else:
+            return True
+        
+    def runPipelineCLI(self) -> bool:
+        try:
+            self.setupRoot()
+            self.setupCalibs()
+            self.calibrateCLI()
+            self.batchSetup()
+            self.triangulateCLI()
+        except subprocess.CalledProcessError as e:
+            logger.error(f'AP.runPipeline subprocess error: rc={e.returncode}, cmd={e.cmd}')
+            return False
+        except Exception as e:
+            logger.error(f'AP.runPipelineCLI error: {e}')
             return False
         else:
             return True
@@ -253,7 +281,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
                 for daet in calibs
             )
 
-    def calibrateCLI(self, override_existing:bool = False) -> None:
+    def calibrateCLI(self, override_existing:bool = False, use_env: bool = True) -> None:
         '''CLI anipose'''
         if not (self.ani_root_path / 'config.toml').exists():
             self.setupRoot()
@@ -268,7 +296,10 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             'cd', str(self.ani_root_path), '&&',
             'anipose', 'calibrate'
         ]
-        result = subprocess.run(cmd, shell=True, check=True)
+        if use_env:
+            result = subprocess.run(cmd, shell=True, check=True, env=CLI_ENV)
+        else:
+            result = subprocess.run(cmd, shell=True, check=True)
         if result.stderr:
             logger.error(result.stderr)
 
@@ -394,7 +425,7 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
         for daet in self.note.daets:
             self.setupSingleDaet(daet, use_filtered, copy_videos)
     
-    def triangulateCLI(self) -> None:
+    def triangulateCLI(self, use_env: bool = True) -> None:
         '''CLI anipose'''
         disk = os.path.splitdrive(str(self.ani_root_path))[0]
         cmd = [
@@ -403,7 +434,10 @@ class AniposeProcessor:     #TODO will need to test behavior on duplicative runs
             'cd', str(self.ani_root_path), '&&',
             'anipose', 'triangulate'
         ]
-        result = subprocess.run(cmd, shell=True, check=True)
+        if use_env:
+            result = subprocess.run(cmd, shell=True, check=True, env=CLI_ENV)
+        else:
+            result = subprocess.run(cmd, shell=True, check=True)
         if result.stderr:
             logger.error(result.stderr)
     

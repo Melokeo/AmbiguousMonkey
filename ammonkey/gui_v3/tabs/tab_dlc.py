@@ -1,9 +1,13 @@
 import logging
 import flet as ft
+import asyncio
+
 
 from .. import landfill as lf
+from ..landfill import TabJob, JobStatus
 from ...core.dlc import available_dp, dp_factory, initDlc, dp_task
 from ...core.expNote import Task
+from ..business.async_workers import _run_dlc_local, _run_dlc_dask
 
 class TabDlc:
     def __init__(self, logger: logging.Logger) -> None:
@@ -27,7 +31,7 @@ class TabDlc:
         self.btn_run_dlc = ft.ElevatedButton(
             text='!RUN DLC!',
             icon=ft.Icons.PLAY_CIRCLE,
-            on_click=self.on_run_dlc_click
+            on_click=self.on_run_dlc_click_jobbed,
         )
 
         self.pr = ft.ProgressRing(width=16, height=16, stroke_width=2, value=None)
@@ -105,13 +109,29 @@ class TabDlc:
             return note_tasks.issubset(target_task_set)
         else:
             return note_tasks == {target_task}
+        
+    async def on_run_dlc_click_jobbed(self, e: ft.ControlEvent):
+        job = lf.curr_job
+        if job is None:
+            return
+        if job.is_running:
+            self.lg.warning('task already running for this note')
+            return
 
+        model = self.model_dropdown.value
+        if not model:
+            self.lg.error('no model selected')
+            return
+
+        job.selected_set = model
+        if lf.USE_DASK:
+            job.task = asyncio.create_task(_run_dlc_dask(job))
+        else:
+            job.task = asyncio.create_task(_run_dlc_local(job))
+        
     def on_run_dlc_click(self, e: ft.ControlEvent):
         self.lg.debug(f'on_run_dlc_click {e}')
-        self.running_row.visible = True
-        self.btn_run_dlc.disabled = True
-        self.tab.icon = ft.Icons.FIRE_EXTINGUISHER
-        self.tab.update()
+        self._ui_processing_stat(True)
 
         try:
             if not hasattr(self, 'dp_func') or self.dp_func is None:    # valid model selected
@@ -148,7 +168,22 @@ class TabDlc:
                 self.lg.info(f'Congrats! DLC finished (perhaps)')
 
         finally:
-            self.running_row.visible = False
-            self.btn_run_dlc.disabled = False
+            self._ui_processing_stat(False)
+
+    def _ui_processing_stat(self, processing: bool) -> None:
+        self.lg.debug(f'switching dlc processing stat: {processing}')
+        self.running_row.visible = processing
+        self.btn_run_dlc.disabled = processing
+        if processing:
+            self.tab.icon = ft.Icons.FIRE_EXTINGUISHER
+        else:
             self.tab.icon = ft.Icons.MEMORY
-            self.tab.update()
+        self.tab.update()
+
+    def update_state_to(self, job: TabJob) -> None:
+        job.selected_set = self.model_dropdown.value
+
+    def render_state_from(self, job: TabJob) -> None:
+        self.model_dropdown.value = job.selected_set
+        self.dp = job.dp
+        self._ui_processing_stat(job.dlc_processing)

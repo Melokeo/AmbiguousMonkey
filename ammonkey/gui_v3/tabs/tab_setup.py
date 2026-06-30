@@ -3,6 +3,7 @@ from typing import Callable
 import flet as ft
 
 from .. import landfill as lf
+from ..landfill import TabJob
 from ..components.note_selector import ColNoteSelector
 from ...core.fileOp import dataSetup
 
@@ -45,3 +46,19 @@ class TabSetup:
             self.lg.info(f'Setup ok {lf.note}')
         else:
             self.lg.error('ExpNote is not loaded!')
+
+    def update_state_to(self, job: TabJob) -> None:
+        job.selected_daets = set(self.note_selector.selected_daets)
+
+    def render_state_from(self, job: TabJob) -> None:
+        if not job.selected_daets:
+            return
+        self.lg.debug(f're-select: {job.selected_daets}')
+        sel = self.note_selector
+        sel.selected_daets = set(job.selected_daets) & set(sel.daet_checkboxes.keys())
+        for daet, cb in sel.daet_checkboxes.items():
+            is_sel = daet in sel.selected_daets
+            cb.value = is_sel
+            sel.daet_entries_map[daet].opacity = 1.0 if is_sel else 0.5
+        sel._update_task_chip_visuals()
+        sel.update()

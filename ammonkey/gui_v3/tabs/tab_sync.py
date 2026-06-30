@@ -1,11 +1,15 @@
+import asyncio
 import logging
 from pathlib import Path
 import flet as ft
 
 from .. import landfill as lf
+from ..landfill import TabJob
 from ...core.camConfig import CamConfig, CamGroup
 from ...core.sync import VidSynchronizer
 from ..components.cam_config import ColCamCfgs
+
+from ..business.async_workers import _run_sync_local, _run_sync_dask
 
 class TabSync:
     def __init__(self, logger: logging.Logger) -> None:
@@ -38,7 +42,7 @@ class TabSync:
         self.btn_sync_all = ft.ElevatedButton(
             text='Synchronize',
             icon=ft.Icons.SYNC,
-            on_click=self.on_sync_all
+            on_click=self.on_sync_all_jobbed,
         )
 
         self.pr = ft.ProgressRing(width=16, height=16, stroke_width=2, value=None)
@@ -130,6 +134,50 @@ class TabSync:
         self.btn_sync_all.disabled = False
         self.tab.update()
 
+    async def on_sync_all_jobbed(self, e: ft.ControlEvent):
+        job = lf.curr_job
+        if job is None:
+            return
+        if job.is_running:
+            self.lg.warning('task already running for this note')
+            return
+
+        if self.vs is None:
+            self.lg.info('synchronizer not created, creating...')
+            self.on_create_click(e)
+            if self.vs is None:
+                self.lg.error('failed to create synchronizer')
+                return
+
+        self.lg.debug('Params:')
+        for cam in self.vs.cam_config.cams:
+            self.lg.debug(f'\t{cam.name} at {id(cam)} ({cam.led_color})\tROI: {cam.roi})')
+
+        job.vs = self.vs
+
+        if lf.USE_DASK:
+            job.task = asyncio.create_task(_run_sync_dask(job))
+        else:
+            job.task = asyncio.create_task(_run_sync_local(job))
+
+    def _ui_processing_stat(self, processing: bool) -> None:
+        self.lg.debug(f'switching sync processing stat: {processing}')
+        self.syncing_row.visible = processing
+        self.btn_sync_all.disabled = processing
+        if processing:
+            self.tab.icon = ft.Icons.FIRE_EXTINGUISHER
+        else:
+            self.tab.icon = ft.Icons.ALIGN_HORIZONTAL_RIGHT
+        self.tab.update()
+
     def reset(self):
         pass
 
+    def update_state_to(self, job: TabJob) -> None:
+        if hasattr(self, 'vs'):
+            job.vs = self.vs
+
+    def render_state_from(self, job: TabJob) -> None:
+        if job.vs is not None:
+            self.vs = job.vs
+        self._ui_processing_stat(job.sync_processing)

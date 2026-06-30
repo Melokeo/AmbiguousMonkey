@@ -16,6 +16,7 @@ class JobStatus(Enum):
     RUNNING = 'running'
     DONE = 'done'
     ERROR = 'error'
+    FAILED = 'failed' # not error, just wrong input or something
     CANCELLED = 'cancelled'
 
 @dataclass
@@ -30,6 +31,8 @@ class TabJob:
         init=False, default=None, repr=False
     )
 
+    # setup
+    selected_daets: set[DAET] | None = field(init=False, default=None)
     # sync
     vs: VidSynchronizer | None = field(init=False, default=None)
     sync_processing: bool = field(init=False, default=False)
@@ -40,8 +43,8 @@ class TabJob:
     # anipose
     ap: AniposeProcessor | None = field(init=False, default=None)
     ani_processing: bool = field(init=False, default=False)
-    selected_model: str | None = field(init=False, default=None)
-    selected_vid: str | None = field(init=False, default=None)
+    selected_model: str | None = field(init=False, default='* NOTHING *')
+    selected_vid: str | None = field(init=False, default='* NOTHING *')
     rng_video: tuple[float, float] = field(init=False, default=(30.0, 60.0))
     ani_info: str = field(init=False, default='')
     last_error: str | None = field(init=False, default=None)

@@ -165,7 +165,8 @@ class TabAnipose:
         
         msn = self.model_dropdown.value
         if not msn or msn == NOTHING:
-            self.lg.error('no model selected'); return
+            self.lg.error('no model selected'); 
+            return
 
         job.selected_model = msn
         job.task = asyncio.create_task(_run_anipose(job))
@@ -174,10 +175,9 @@ class TabAnipose:
     def on_run_anipose_click(self, e: ft.ControlEvent):
         msn = self.model_dropdown.value
         self.lg.debug(f'run ani w/ {msn}')
-        # if msn is None or msn == NOTHING:
-        #     self.lg.error('Model set to process is not selected')
-        #     return
-        msn = 'TEST' # for debug
+        if msn is None or msn == NOTHING:
+            self.lg.error('Model set to process is not selected')
+            return
         
         self.lg.info('Starting anipose...')
         self.lg.debug(f'This note has calibs: {[str(daet) for daet in lf.note_filtered.getCalibs()]}')

@@ -227,10 +227,23 @@ class AmmApp:
         else:
             self.lg.info(f"Selected {n}")
 
-        # update job
-        self.switch_job()
+        if lf.curr_job:
+            self.update_job_from_all_tabs()
 
-        # update ui
+        try:
+            n = ExpNote(Path(sel_path))
+            lf.note = n
+            lf.note_filtered = ExpNote(Path(sel_path))
+        except FileNotFoundError as fnf:
+            self.lg.error(f'Failed to load {sel_path}. This is rare. {fnf}')
+            return
+        except Exception as ex:
+            self.lg.error(f'Unknown exception when loading {sel_text}: {ex}')
+            return
+        else:
+            self.lg.info(f"Selected {n}")
+
+        # ui to the new note
         try:
             self.tab_setup.note_selector.refresh_note()
             self.update_current_note_display()
@@ -240,44 +253,42 @@ class AmmApp:
         except Exception as ex:
             self.lg.error(f'Updating DAET UI failed: {ex}')
             return
-        
-        if self.tabs.selected_index == 0: # opened folder setup tab
-            for tab in self.tabs_list[1:]:
-                tab.disabled = True
-                # self.lg.debug(f'{tab.icon}, {tab.disabled=}')
-            self.pg.update()
+
+        # swap curr_job and LOAD new job state onto the fresh UI
+        self.switch_job()
 
         return
     
     # -- handling job state switching -------
     def switch_job(self) -> None:
-        '''save current to kennel, then create new (or get existing)'''
+        '''swap to job for current note and load its state.
+          caller must have already saved old job state!!!'''
         animal = lf.note_filtered.animal if lf.note_filtered else None
         date = lf.note_filtered.date if lf.note_filtered else None
         if not animal or not date:
-            self.lg.warning('switch_job: animal or date get None, which is impossible')
+            self.lg.warning('switch_job: animal or date is None')
             return
-        
-        # it might trigger when note is actually the same
+
         if lf.curr_job and animal == lf.curr_job.key[0] and date == lf.curr_job.key[1]:
-            self.lg.debug('switch_job: same animal/date as current, no switch needed')
-            # or.. needed??
+            self.lg.debug('switch_job: same animal/date, no switch')
             return
-        
-        new_job = lf.kennel.get_or_new(
-            animal=animal,
-            date=date,
-            note=lf.note_filtered,
-        )
+
+        new_job = lf.kennel.get_or_new(animal=animal, date=date, note=lf.note_filtered)
+        # loop back to apply daet selection
+        if new_job.selected_daets:
+            new_job.note = lf.note_filtered.dupWithWhiteList(list(new_job.selected_daets))
+            lf.note_filtered = new_job.note
 
         if lf.curr_job:
-            self.update_job_from_all_tabs()
             lf.curr_job.unsubscribe()
-            lf.kennel.update_job(lf.curr_job) # loooks nonsense because they are the same instance, idk
-        
+            lf.kennel.update_job(lf.curr_job)   # state saved by caller
+
         lf.curr_job = new_job
         lf.curr_job.subscribe(self._on_job_update)
-        self.trigger_tab_load() # which will be default state if new
+        self.trigger_tab_load()
+        
+        self.update_current_note_display()
+
         self.lg.debug(f'switch_job: switched to {lf.curr_job}')
     
     def update_job_from_all_tabs(self) -> None:
@@ -342,13 +353,13 @@ class AmmApp:
             self.tab_ani.on_vid_refresh_click(e)
     
     def on_run_all(self, e):
-        self.btn_run_all.disabled = True
-        self.pg.update()
 
         if lf.USE_DASK:
             self.lg.debug('dask full ppl')
             run_all_dask(self)
         else:
+            self.btn_run_all.disabled = True
+            self.pg.update()
             self.lg.info('Run full pipeline local')
             run_all_local(e, self)
 

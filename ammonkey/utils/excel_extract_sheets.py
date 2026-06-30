@@ -54,7 +54,7 @@ def copy_excel_tabs_to_files(
         output_file = output_dir / f"{sheet_name}.xlsx"
         new_wb.save(output_file)
 
-def dispatch_files(source_dir: str | Path, dest_dir: str | Path, prefix: str = "RISO") -> None:
+def dispatch_files(source_dir: str | Path, dest_dir: str | Path, prefix: str = "RISO", allowed_files: list[str] | None = None) -> None:
     """Dispatch YYYYMMDD files to destination structure.
 
     New behavior: pass destination root (e.g. .../DATA_RAW/RISO), then files go to
@@ -71,6 +71,9 @@ def dispatch_files(source_dir: str | Path, dest_dir: str | Path, prefix: str = "
     
     for file_path in source_dir.glob("*.xlsx"):
         filename = file_path.stem
+
+        if allowed_files is not None and filename not in allowed_files:
+            continue
         
         # check if filename matches yyyymmdd pattern
         if len(filename) == 8 and filename.isdigit():

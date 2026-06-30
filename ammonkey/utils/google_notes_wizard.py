@@ -55,6 +55,59 @@ def tui_select(options: list[str], prompt: str = "Select:") -> str:
     return options[selected]
 
 
+def tui_multiselect(options: list[tuple[str, str]], prompt: str = "Select options:", default_all: bool = False) -> list[str]:
+    from rich.live import Live
+    from rich.table import Table
+    from rich.console import Group
+    selected_indices = set(range(len(options))) if default_all else set()
+    focused = 0
+    
+    with Live(auto_refresh=False, transient=True) as live:
+        while True:
+            table = Table(show_header=False, box=None, padding=(0, 1))
+            table.add_column("Focus", justify="center", width=2)
+            table.add_column("Selected", justify="center", width=3)
+            table.add_column("Option", overflow="fold")
+            
+            for i, (opt_id, opt_disp) in enumerate(options):
+                is_focused = (i == focused)
+                is_selected = i in selected_indices
+                
+                focus_col = ">" if is_focused else ""
+                sel_col = "[green]\\[x][/green]" if is_selected else "\\[ ]"
+                style = "bold cyan" if is_focused else "default"
+                
+                table.add_row(
+                    f"[{style}]{focus_col}[/{style}]", 
+                    sel_col, 
+                    f"[{style}]{opt_disp}[/{style}]"
+                )
+            
+            text_dim = "[dim](Up/Down: Move, Space: Toggle, Enter: Confirm)[/dim]"
+            live.update(Panel(Group(f"[cyan]{prompt}[/cyan]", table, text_dim)))
+            live.refresh()
+            
+            key = msvcrt.getch()
+            if key == b'\xe0':
+                key = msvcrt.getch()
+                if key == b'H':  # Up arrow
+                    focused = (focused - 1) % len(options)
+                elif key == b'P':  # Down arrow
+                    focused = (focused + 1) % len(options)
+            elif key == b' ':  # Space
+                if focused in selected_indices:
+                    selected_indices.remove(focused)
+                else:
+                    selected_indices.add(focused)
+            elif key == b'\r':  # Enter
+                break
+            elif key == b'\x03': # Ctrl+C
+                sys.exit(0)
+                
+    selected_ids = [options[i][0] for i in sorted(list(selected_indices))]
+    return selected_ids
+
+
 def get_available_configs() -> dict[str, Path]:
     """Find valid JSON configs in google_cred dir."""
     CRED_DIR.mkdir(parents=True, exist_ok=True)
@@ -179,12 +232,23 @@ def run_pipeline(config_path: Path):
             console.print("[bold green]No new files to copy. Done.[/bold green]")
             return
 
-        if not Confirm.ask("Proceed with dispatch?"):
+        action = tui_select(["Dispatch All", "Select Files to Dispatch", "Cancel"], "Proceed with dispatch?")
+        
+        if action == "Cancel":
             console.print("[dim]Cancelled before dispatch.[/dim]")
             return
         
-        console.print('[bold]Now organizing notes to dest folders...[/bold]')
-        dispatch_files(temp_dir, output_dir, prefix=note_prefix)
+        if action == "Select Files to Dispatch":
+            options = [(f, f) for f in files_to_copy]
+            selected_files = tui_multiselect(options, "Select files to dispatch:", default_all=True)
+            if not selected_files:
+                console.print("[dim]No files selected. Cancelled dispatch.[/dim]")
+                return
+        else:
+            selected_files = files_to_copy
+        
+        console.print(f'[bold]Now organizing {len(selected_files)} notes to dest folders...[/bold]')
+        dispatch_files(temp_dir, output_dir, prefix=note_prefix, allowed_files=selected_files)
     
     except FileNotFoundError as e:
         console.print(f'[bold red]File not found:[/bold red] {e}. Did you map the P: drive?')

@@ -109,6 +109,7 @@ def main():
         "New Animal",
         "New DLC Model",
         "New Combo",
+        "Connect Existing Anipose Cfg",
         "New Anipose Config",
         "New Anipose Library",
         "All Above",
@@ -124,6 +125,8 @@ def main():
             add_dlc()
         elif choice == "New Combo":
             add_combo()
+        elif choice == "Connect Existing Anipose Cfg":
+            connect_existing_ani_w_model()
         elif choice == "New Anipose Config":
             add_anipose_cfg()
         elif choice == "New Anipose Library":
@@ -336,6 +339,108 @@ def add_combo() -> bool:
 
     return True
 
+def connect_existing_ani_w_model() -> bool:
+    '''connect an existing combo to ani cfg and ani lib'''
+    console.print(Rule("[bold]Connect Combo with Anipose Config & Library[/bold]", style="cyan"))
+    
+    # 1. Select combo(s) to edit
+    combos = get_all_combos()
+    if not combos:
+        console.print("[bold red]Error:[/bold red] No model combos available.")
+        return False
+        
+    selected_combos = tui_multiselect(combos, "Select model combo(s) to edit:")
+    if not selected_combos:
+        console.print("[bold yellow]No combos selected.[/bold yellow]")
+        return False
+        
+    # 2. Select existing cfg file
+    # Get unique cfg files from anipose_cfgs values
+    cfg_files = list(set(Config.anipose_cfgs.values()))
+    if not cfg_files:
+        console.print("[bold red]Error:[/bold red] No anipose configs available in config.")
+        return False
+        
+    selected_cfg = tui_select(cfg_files, "Select anipose config file to use:")
+    if not selected_cfg:
+        return False
+        
+    # 3. Select lib to use
+    libs = list(Config.anipose_libs.libs.keys())
+    if not libs:
+        console.print("[bold red]Error:[/bold red] No anipose libraries available in config.")
+        return False
+        
+    selected_lib = tui_select(libs, "Select anipose library to use:")
+    if not selected_lib:
+        return False
+        
+    # 4. Determine edits and check for overwrites
+    overwrites_cfg = []
+    overwrites_lib = []
+    changes = []
+    
+    for combo in selected_combos:
+        # Check cfg overwrite
+        old_cfg = Config.anipose_cfgs.get(combo)
+        if old_cfg and old_cfg != selected_cfg:
+            overwrites_cfg.append(f"[bold]{combo}[/bold] changed: [yellow]{old_cfg}[/yellow] -> [green]{selected_cfg}[/green]")
+        elif not old_cfg:
+            changes.append(f"[bold]{combo}[/bold] uses [dim italic]calib[/dim italic]\t [green]{selected_cfg}[/green]")
+            
+        # Check lib overwrite
+        old_lib = None
+        for lib_name, lib_info in Config.anipose_libs.libs.items():
+            if combo in lib_info['models']:
+                old_lib = lib_name
+                break
+                
+        if old_lib and old_lib != selected_lib:
+            overwrites_lib.append(f"[bold]{combo}[/bold] changed: [yellow]{old_lib}[/yellow] -> [green]{selected_lib}[/green]")
+        elif not old_lib:
+            changes.append(f"[bold]{combo}[/bold] uses [dim italic]cfg[/dim italic]\t [green]{selected_lib}[/green]")
+
+    # If no changes are needed
+    if not overwrites_cfg and not overwrites_lib and not changes:
+        console.print("[bold green]No changes needed; combos already mapped correctly.[/bold green]")
+        return True
+
+    # 5. Confirm edits
+    console.print("\n[bold]Summary of changes:[/bold]")
+    if changes:
+        console.print("[bold u]New Mappings:[/bold u]")
+        for c in changes:
+            console.print(f"  - {c}")
+            
+    if overwrites_cfg or overwrites_lib:
+        console.print("[bold red u]Overwrites:[/bold red u]")
+        for o in overwrites_cfg:
+            console.print(f"  - {o}")
+        for o in overwrites_lib:
+            console.print(f"  - {o}")
+            
+    if Confirm.ask("\nConfirm these edits and save to config?"):
+        for combo in selected_combos:
+            # Update cfg
+            Config.anipose_cfgs[combo] = selected_cfg
+            
+            # Update lib: remove from previous lib(s)
+            for lib_name, lib_info in Config.anipose_libs.libs.items():
+                if combo in lib_info['models']:
+                    lib_info['models'].remove(combo)
+            
+            # Add to selected lib
+            if combo not in Config.anipose_libs.libs[selected_lib]['models']:
+                Config.anipose_libs.libs[selected_lib]['models'].append(combo)
+                
+        Config.save()
+        console.print("[bold green]Successfully updated configuration.[/bold green]")
+    else:
+        sys.stdout.write("\033[1A\033[2K")
+        sys.stdout.flush()
+        console.print("[dim]Cancelled edits.[/dim]")
+        
+    return True
 
 def add_anipose_cfg() -> bool:
     console.print(Rule("[bold]New Anipose Config[/bold]", style="cyan"))
@@ -423,6 +528,9 @@ def add_anipose_lib() -> bool:
         dir_lines += 1
         try:
             new_path.mkdir(parents=True, exist_ok=True)
+            from datetime import date
+            # placeholder calib file, or core.ani will fail on init
+            (new_path / f'placeholder-calibration-{date.today().strftime("%Y%m%d")}.toml').touch() 
             console.print(f"[bold green]Created directory[/bold green]")
             dir_lines += 1
             created_dir = True

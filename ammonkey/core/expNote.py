@@ -361,7 +361,7 @@ class ExpNote:
         
         return new_note
     
-    def applyTaskFilter(self, tasks:list[Task], exclude:bool=False) -> 'ExpNote':
+    def applyTaskFilter(self, tasks:list[Task] | Task, exclude:bool=False) -> 'ExpNote':
         '''returns a duplicate of the ExpNote with filtered tasks. 
         by default include all tasks in list[Task].
         Exclude list[Task] if exclude==True'''

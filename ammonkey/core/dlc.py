@@ -7,6 +7,7 @@ import re, json
 from socket import gethostname
 from dataclasses import dataclass, asdict
 from pathlib import Path
+import shutil
 from datetime import datetime
 from hashlib import md5
 from collections.abc import Callable
@@ -194,7 +195,13 @@ class DLCModel:
             logger.error(f'DLC analysis failed for {vid_path}: {e}')
             raise e
             return False
-    
+        
+    def should_skip(self, skip_file: Path) -> bool:
+        '''in the future: 
+        actually check skip content and see whether this model should skip this video
+         because relying on dlc itself to skip is very slow'''
+        return skip_file.exists()
+
     def _getPeedTree(self, vid_path:Path) -> Path:
         vid_root = vid_path.parent if vid_path.is_file() else vid_path
         return vid_root.parent / "DLC" / "separate" / self.final_folder_name
@@ -212,7 +219,8 @@ class DLCModel:
                 if new_path.exists():
                     logger.warning(f'File already exists in DLC output folder, skipping: {new_path}')
                     continue
-                sub.rename(new_path)
+                shutil.copy2(sub, new_path)
+                # sub.rename(new_path)
                 file_list.append(sub.name+'\n')
         
         # write this analysis' info

@@ -26,10 +26,8 @@ def mergeDlcOutput(*folders:Path) -> int:
     
     if (l:=len(folders)) < 1:
         raise ValueError(f'mergeDLCOutput: expected >=1 args, passed {l}')
-    elif l == 1:
-        merge_name = getDLCMergedFolderName(folders[0], None)
     else:
-        merge_name = getDLCMergedFolderName(*folders[0:2])
+        merge_name = getDLCMergedFolderName(*folders)
 
     dlc_root = folders[0].parent.parent  # should be {daet}/DLC/    # NG - hardcoded
     dst = dlc_root / merge_name

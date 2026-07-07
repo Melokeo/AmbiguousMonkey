@@ -157,9 +157,8 @@ class VidSynchronizer:
                 # check if audio sync failed
                 for k,v in audio_results.items():
                     if any(s is None for s in v):
-                        self.wood.logger.error(f"Failed processing {k}: Audio sync failed criteria")
-                        logger.error(f"Failed processing {k}: Audio sync failed criteria")
-                        audio_results.pop(k)
+                        self.wood.logger.warning(f"Failed processing {k}: Audio sync failed criteria")
+                        logger.warning(f"Failed processing {k}: Audio sync failed criteria")
 
                 # LED sync and cross-validation for detection targets
                 for daet in detection_daets:
@@ -189,26 +188,29 @@ class VidSynchronizer:
             
             return results
 
-    def _runAudioSync(self, daets: list[DAET]) -> dict[DAET, list[int]]:
+    def _runAudioSync(self, daets: list[DAET]) -> dict[DAET, list[int | None]]:
         """Run audio synchronization for all DAETs"""
         audio_results = {}
         
         with self.wood.log('AudioSync', f'{len(daets)} entries'):
             for daet in daets:
                 try:
-                    vid_paths = self._getVideoPaths(daet)
+                    vid_paths = self._getAllVidPaths(daet)
                     if len(vid_paths) < 2:
                         self.wood.logger.warning(f"Insufficient videos for audio sync: {daet}")
                         audio_results[daet] = []
                         continue
                     
+                    none_idx = [
+                        i for i, vp in enumerate(vid_paths)
+                        if vp is None
+                    ]
                     # run audio sync
                     sync_results = SyncAud.sync_videos(
-                        [str(vp) for vp in vid_paths], 
+                        [str(vp) for vp in vid_paths if vp], 
                         fps=self.config.audio_fps,
                         duration=self.config.audio_test_duration,
                         start=0,
-                        manual_fallback=True,
                     )
                     
                     # save waveforms for debugging
@@ -227,7 +229,14 @@ class VidSynchronizer:
                         )
                     
                     # extract start frames
-                    starts = [result[-1] if result else None for result in sync_results.values()]
+                    present_starts = iter(
+                        result[-1] if result else None
+                        for result in sync_results.values()
+                    )
+                    starts = [
+                        None if vp is None else next(present_starts)
+                        for vp in vid_paths
+                    ]
                     audio_results[daet] = starts
                     
                 except Exception as e:
@@ -236,7 +245,7 @@ class VidSynchronizer:
         
         return audio_results
     
-    def _runLEDSync(self, daet: DAET, audio_starts: list[int]) -> SyncResult:
+    def _runLEDSync(self, daet: DAET, audio_starts: list[int | None]) -> SyncResult:
         """**single** DAET LED detection and cross-validation"""
         try:
             sync_folder = self._getSyncFolder(daet)
@@ -244,7 +253,7 @@ class VidSynchronizer:
             
             # get video info
             vid_set = self.notes.getVidSetIdx(daet)
-            vid_paths = self._getVideoPaths(daet)
+            vid_paths = self._getAllVidPaths(daet)
             
             if len(vid_paths) < 2:
                 return SyncResult(
@@ -253,8 +262,13 @@ class VidSynchronizer:
                     message="Insufficient videos"
                 )
             
-            # LED detection
-            led_starts = self._detectLEDStarts(daet, vid_paths, vid_set)
+            # LED detection preserving Nones
+            led_present = self._detectLEDStarts(daet, [vp for vp in vid_paths if vp], vid_set)
+            it = iter(led_present)
+            led_starts = [
+                None if vp is None else next(it)
+                for vp in vid_paths
+            ]
             
             # cross-validation
             corrected_starts, validation_status, message = self._crossValidate(
@@ -352,7 +366,7 @@ class VidSynchronizer:
         return led_starts
     
     def _crossValidate(self, led_starts: list[int | None], 
-                    audio_starts: list[int]) -> tuple[list[int | None]| None, Optional[int], str]:
+                    audio_starts: list[int | None]) -> tuple[list[int | None]| None, Optional[int], str]:
         """Cross-validate LED and audio sync results
         returns:
         - corrected_starts: tuple[int|none], or single None if failed
@@ -412,6 +426,8 @@ class VidSynchronizer:
         
         for i, (led_start, audio_start) in enumerate(zip(led_starts, audio_starts)):
             if audio_start is None:
+                if led_start == -1:
+                    corrected_starts[i] = None   # no audio to correct it, drop the sentinel
                 continue
                 
             expected = median_offset + audio_start
@@ -446,29 +462,25 @@ class VidSynchronizer:
             message += f" ({', '.join(message_parts)})"
 
         # final pass so that no start is below 1
-        if all(s is not None for s in corrected_starts):
-            corrected_starts = self._ensureNoSubzero(corrected_starts)  #type:ignore
-        else:
-            logger.warning('Something is wrong with sync validation logic, see None in corrected_starts')
-        
-        return corrected_starts, None, message  #type:ignore
-        # need to fix typing annotation above
+        corrected_starts = self._ensureNoSubzero(corrected_starts)
+        return corrected_starts, None, message
+
     
-    def _ensureNoSubzero(self, starts: list[int]) -> list[int]:
-        """Ensure no start frame is below 1 by shifting all starts up if needed
-        Assumes no None values in starts"""
+    def _ensureNoSubzero(self, starts: list[int | None]) -> list[int | None]:
+        """Ensure no start frame is below 1 by shifting all starts up if needed.
+        None entries (missing cameras) are preserved in place."""
         valid_starts = [s for s in starts if s is not None]
         if not valid_starts:
             return starts
-        
+
         min_start = min(valid_starts)
         if min_start < 1:
             shift = 1 - min_start
-            starts = [s + shift for s in starts]
-        
+            starts = [s + shift if s is not None else None for s in starts]
+
         return starts
 
-    def _createSyncConfig(self, daet: DAET, vid_paths: list[Path], 
+    def _createSyncConfig(self, daet: DAET, vid_paths: list[Path|None], # vid file could be missing 
                          vid_set: list[int | None], starts: list[int | None]) -> Path:
         """Single DAET: create sync cfg JSON"""
         sync_folder = self._getSyncFolder(daet)
@@ -478,7 +490,7 @@ class VidSynchronizer:
         # build video configs
         video_configs = []
         for cam_idx, (vid_path, vid_id, start) in enumerate(zip(vid_paths, vid_set, starts)):
-            if vid_id is None or start is None:
+            if vid_id is None or start is None or vid_path is None:
                 continue
                 
             cam_num = cam_idx + 1
@@ -615,6 +627,10 @@ class VidSynchronizer:
     
     def _getVideoPaths(self, daet: DAET) -> list[Path]:
         """Get actual video file paths for DAET"""
+        return [p for p in self._getAllVidPaths(daet) if p is not None]
+    
+    def _getAllVidPaths(self, daet: DAET) -> list[Path | None]:
+        """Get actual video file paths for DAET"""
         vid_set = self.notes.getVidSetIdx(daet)
         paths = []
         
@@ -625,7 +641,7 @@ class VidSynchronizer:
                 path = self.notes.getVidPath(daet, cam_idx)
                 paths.append(path)
         
-        return [p for p in paths if p is not None]
+        return paths
 
 # === Usage Function ===
 

@@ -143,6 +143,7 @@ class VidSynchronizer:
         """
         Run synchronization for all valid entries
         """
+        self.config.override_existing = not skip_existing
         with self.wood.log('SyncAll', f'task={task.name}, override={self.config.override_existing}'):
             # get entries that need detection
             detection_daets = self._getTargetDaets(task, skip_existing)
